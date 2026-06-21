@@ -12,6 +12,17 @@ export type Leg = {
   closedAt: string | null;
 };
 
+export type TxnLite = {
+  id: string;
+  type: string;
+  qty: number;
+  price: number;
+  fees: number;
+  tradeDate: string;
+  currency: string;
+  note: string | null;
+};
+
 export type Row = {
   id: string; // Head-Position
   kind: "STOCK" | "OPTION";
@@ -34,4 +45,6 @@ export type Row = {
   closedAt: string | null;
   isChain: boolean;
   legs: Leg[];
+  transactions: TxnLite[]; // alle Transaktionen (über die Kette), chronologisch
+  hasNotes: boolean;
 };

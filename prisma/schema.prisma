@@ -93,13 +93,34 @@ model Account {
   name         String
   broker       String?
   baseCurrency String   @default("USD")
+  currencies   String[] @default([]) // alle im Konto geführten Währungen (inkl. baseCurrency)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  positions    Position[]
-  transactions Transaction[]
+  positions        Position[]
+  transactions     Transaction[]
+  cashTransactions CashTransaction[]
 
   @@index([userId])
+}
+
+enum CashTxnType {
+  DEPOSIT
+  WITHDRAWAL
+}
+
+model CashTransaction {
+  id        String      @id @default(cuid())
+  accountId String
+  account   Account     @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  type      CashTxnType
+  amount    Decimal     @db.Decimal(18, 2)
+  currency  String
+  date      DateTime
+  note      String?
+  createdAt DateTime    @default(now())
+
+  @@index([accountId])
 }
 
 enum InstrumentType {

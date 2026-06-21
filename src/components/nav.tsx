@@ -4,15 +4,15 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/components/ui";
 
-type IconName = "dashboard" | "overview" | "stats" | "add" | "accounts" | "settings";
+type IconName = "dashboard" | "overview" | "stats" | "cash" | "add" | "accounts" | "settings";
 
-const links: { href: string; label: string; icon: IconName }[] = [
+const links: { href: string; label: string; icon: IconName; dividerBefore?: boolean }[] = [
   { href: "/", label: "Dashboard", icon: "dashboard" },
-  { href: "/overview", label: "Übersicht", icon: "overview" },
   { href: "/stats", label: "Statistik", icon: "stats" },
-  { href: "/trades/new", label: "Trade erfassen", icon: "add" },
-  { href: "/accounts", label: "Konten", icon: "accounts" },
-  { href: "/settings", label: "Einstellungen", icon: "settings" },
+  { href: "/trades/new", label: "Trade erfassen", icon: "add", dividerBefore: true },
+  { href: "/overview", label: "Trades", icon: "overview" },
+  { href: "/accounts", label: "Konten", icon: "accounts", dividerBefore: true },
+  { href: "/cash", label: "Kontostand", icon: "cash" },
 ];
 
 function Icon({ name }: { name: IconName }) {
@@ -54,6 +54,13 @@ function Icon({ name }: { name: IconName }) {
         <path d="M18 16v-7" />
       </>
     ),
+    cash: (
+      <>
+        <rect x="2" y="6" width="20" height="12" rx="2" />
+        <circle cx="12" cy="12" r="2.5" />
+        <path d="M6 12h.01M18 12h.01" />
+      </>
+    ),
     add: (
       <>
         <circle cx="12" cy="12" r="9" />
@@ -85,21 +92,23 @@ export function Nav() {
       {links.map((l) => {
         const active = l.href === "/" ? pathname === "/" : pathname.startsWith(l.href);
         return (
-          <Link
-            key={l.href}
-            href={l.href}
-            className={cn(
-              "group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all",
-              active
-                ? "bg-emerald-500/10 text-emerald-300 ring-1 ring-inset ring-emerald-500/20"
-                : "text-zinc-400 hover:bg-white/5 hover:text-zinc-100",
-            )}
-          >
-            <span className={cn("transition-colors", active ? "text-emerald-400" : "text-zinc-500 group-hover:text-zinc-300")}>
-              <Icon name={l.icon} />
-            </span>
-            {l.label}
-          </Link>
+          <div key={l.href}>
+            {l.dividerBefore && <div className="my-2 h-px bg-white/5" />}
+            <Link
+              href={l.href}
+              className={cn(
+                "group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all",
+                active
+                  ? "bg-emerald-500/10 text-emerald-300 ring-1 ring-inset ring-emerald-500/20"
+                  : "text-zinc-400 hover:bg-white/5 hover:text-zinc-100",
+              )}
+            >
+              <span className={cn("transition-colors", active ? "text-emerald-400" : "text-zinc-500 group-hover:text-zinc-300")}>
+                <Icon name={l.icon} />
+              </span>
+              {l.label}
+            </Link>
+          </div>
         );
       })}
     </nav>

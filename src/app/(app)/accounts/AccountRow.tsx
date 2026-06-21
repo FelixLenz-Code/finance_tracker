@@ -1,8 +1,8 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
-import { Card, Button, Input, Label, Select, FieldError, FormError } from "@/components/ui";
-import { CURRENCIES } from "@/lib/constants";
+import { Card, Button, Input, Label, FieldError, FormError } from "@/components/ui";
+import { CurrencyFields } from "./CurrencyFields";
 import { updateAccount, type AccountState } from "./actions";
 import { DeleteAccountButton } from "./DeleteAccountButton";
 
@@ -11,6 +11,7 @@ type Account = {
   name: string;
   broker: string | null;
   baseCurrency: string;
+  currencies: string[];
   positions: number;
   transactions: number;
   createdAt: string;
@@ -30,25 +31,23 @@ export function AccountRow({ account }: { account: Account }) {
     return (
       <Card className="space-y-3">
         <FormError message={state.error} />
-        <form action={action} className="flex flex-wrap items-end gap-3">
+        <form action={action} className="space-y-3">
           <input type="hidden" name="id" value={account.id} />
-          <div className="min-w-40 flex-1">
-            <Label htmlFor={`name-${account.id}`}>Name</Label>
-            <Input id={`name-${account.id}`} name="name" defaultValue={account.name} required />
-            <FieldError message={state.fieldErrors?.name} />
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="min-w-40 flex-1">
+              <Label htmlFor={`name-${account.id}`}>Name</Label>
+              <Input id={`name-${account.id}`} name="name" defaultValue={account.name} required />
+              <FieldError message={state.fieldErrors?.name} />
+            </div>
+            <div className="min-w-40 flex-1">
+              <Label htmlFor={`broker-${account.id}`}>Broker</Label>
+              <Input id={`broker-${account.id}`} name="broker" defaultValue={account.broker ?? ""} />
+            </div>
           </div>
-          <div className="min-w-40 flex-1">
-            <Label htmlFor={`broker-${account.id}`}>Broker</Label>
-            <Input id={`broker-${account.id}`} name="broker" defaultValue={account.broker ?? ""} />
-          </div>
-          <div className="w-32">
-            <Label htmlFor={`ccy-${account.id}`}>Währung</Label>
-            <Select id={`ccy-${account.id}`} name="baseCurrency" defaultValue={account.baseCurrency}>
-              {CURRENCIES.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </Select>
-          </div>
+          <CurrencyFields
+            defaultBase={account.baseCurrency}
+            defaultCurrencies={account.currencies}
+          />
           <div className="flex gap-2">
             <Button type="submit" disabled={pending}>{pending ? "Speichern…" : "Speichern"}</Button>
             <Button type="button" variant="ghost" onClick={() => setEditing(false)}>Abbrechen</Button>

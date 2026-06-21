@@ -17,6 +17,12 @@ function zerr(err: z.ZodError): Record<string, string> {
   return out;
 }
 
+/** Währungen aus dem Formular: ausgewählte Checkboxen + Basiswährung, dedupliziert. */
+function currenciesFrom(formData: FormData, base: string): string[] {
+  const picked = formData.getAll("currencies").map((v) => String(v).toUpperCase());
+  return Array.from(new Set([base, ...picked]));
+}
+
 export async function createAccount(
   _prev: AccountState,
   formData: FormData,
@@ -31,10 +37,12 @@ export async function createAccount(
       name: parsed.data.name,
       broker: parsed.data.broker || null,
       baseCurrency: parsed.data.baseCurrency,
+      currencies: currenciesFrom(formData, parsed.data.baseCurrency),
     },
   });
   revalidatePath("/accounts");
   revalidatePath("/");
+  revalidatePath("/cash");
   return {};
 }
 
@@ -54,12 +62,14 @@ export async function updateAccount(
       name: parsed.data.name,
       broker: parsed.data.broker || null,
       baseCurrency: parsed.data.baseCurrency,
+      currencies: currenciesFrom(formData, parsed.data.baseCurrency),
     },
   });
   if (res.count === 0) return { error: "Konto nicht gefunden." };
 
   revalidatePath("/accounts");
   revalidatePath("/");
+  revalidatePath("/cash");
   return { ok: true };
 }
 

@@ -2,7 +2,7 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { toNum } from "@/lib/format";
 import { OverviewTable } from "./OverviewTable";
-import type { Row, Leg } from "./types";
+import type { Row, Leg, TxnLite } from "./types";
 
 type PositionWithRel = Awaited<ReturnType<typeof loadPositions>>[number];
 
@@ -12,6 +12,7 @@ async function loadPositions(userId: string) {
     include: {
       instrument: true,
       account: { select: { id: true, name: true, baseCurrency: true } },
+      transactions: { orderBy: { tradeDate: "asc" } },
     },
     orderBy: { openedAt: "desc" },
   });
@@ -72,6 +73,19 @@ function makeRow(head: PositionWithRel, chain: PositionWithRel[]): Row {
   const legs = chain
     .map(toLeg)
     .sort((a, b) => new Date(a.openedAt).getTime() - new Date(b.openedAt).getTime());
+  const transactions: TxnLite[] = chain
+    .flatMap((p) => p.transactions)
+    .map((t) => ({
+      id: t.id,
+      type: t.type,
+      qty: toNum(t.qty),
+      price: toNum(t.price),
+      fees: toNum(t.fees) + toNum(t.commission),
+      tradeDate: t.tradeDate.toISOString(),
+      currency: t.currency,
+      note: t.notes,
+    }))
+    .sort((a, b) => new Date(a.tradeDate).getTime() - new Date(b.tradeDate).getTime());
   return {
     id: head.id,
     kind: head.kind,
@@ -94,6 +108,8 @@ function makeRow(head: PositionWithRel, chain: PositionWithRel[]): Row {
     closedAt: head.closedAt ? head.closedAt.toISOString() : null,
     isChain: chain.length > 1,
     legs,
+    transactions,
+    hasNotes: transactions.some((t) => t.note),
   };
 }
 
@@ -118,7 +134,7 @@ export default async function OverviewPage({
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Übersicht</h1>
+      <h1 className="text-2xl font-semibold">Trades</h1>
       <OverviewTable rows={rows} accounts={accounts} initialAccount={account} />
     </div>
   );

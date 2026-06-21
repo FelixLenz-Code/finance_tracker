@@ -141,6 +141,32 @@ export function Card({
   );
 }
 
+export function InfoTip({
+  text,
+  className,
+  width = "w-60",
+}: {
+  text: React.ReactNode;
+  className?: string;
+  width?: string;
+}) {
+  return (
+    <span className={cn("group relative ml-1 inline-flex items-center align-middle", className)}>
+      <span className="flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-zinc-600 text-[10px] font-medium leading-none text-zinc-400">
+        i
+      </span>
+      <span
+        className={cn(
+          "pointer-events-none absolute bottom-full left-1/2 z-30 mb-1.5 -translate-x-1/2 rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-2 text-xs font-normal leading-snug text-zinc-200 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100",
+          width,
+        )}
+      >
+        {text}
+      </span>
+    </span>
+  );
+}
+
 export function FieldError({ message }: { message?: string | null }) {
   if (!message) return null;
   return <p className="mt-1 text-sm text-red-400">{message}</p>;

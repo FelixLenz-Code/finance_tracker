@@ -33,6 +33,7 @@ export default async function AccountsPage() {
               name: a.name,
               broker: a.broker,
               baseCurrency: a.baseCurrency,
+              currencies: a.currencies.length ? a.currencies : [a.baseCurrency],
               positions: a._count.positions,
               transactions: a._count.transactions,
               createdAt: a.createdAt.toISOString(),

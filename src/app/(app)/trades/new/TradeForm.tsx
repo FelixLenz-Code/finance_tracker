@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { Button, Input, NumberInput, Label, Select, FieldError, FormError, cn } from "@/components/ui";
+import { Button, Input, NumberInput, Label, Select, FieldError, FormError, InfoTip, cn } from "@/components/ui";
 import { TickerPicker } from "@/components/TickerPicker";
 import { createTrade, type TradeState } from "../actions";
 
@@ -14,9 +14,15 @@ export function TradeForm({ accounts }: { accounts: Account[] }) {
   const [kind, setKind] = useState<"STOCK" | "OPTION">("STOCK");
   const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
   const [instrCcy, setInstrCcy] = useState<string | null>(null);
+  const [premium, setPremium] = useState("");
+  const [contracts, setContracts] = useState("1");
 
   const account = accounts.find((a) => a.id === accountId);
   const ccy = instrCcy ?? account?.baseCurrency ?? "USD";
+
+  const parse = (s: string) => Number(s.replace(",", ".")) || 0;
+  const totalPremium = parse(premium) * parse(contracts) * 100;
+  const fmtTotal = new Intl.NumberFormat("de-DE", { style: "currency", currency: ccy }).format(totalPremium);
 
   return (
     <form action={action} className="space-y-5">
@@ -113,19 +119,40 @@ export function TradeForm({ accounts }: { accounts: Account[] }) {
             </div>
             <div>
               <Label htmlFor="contracts">Kontrakte</Label>
-              <NumberInput id="contracts" name="contracts" integer unit="Kontr." defaultValue="1" required />
+              <NumberInput
+                id="contracts"
+                name="contracts"
+                integer
+                unit="Kontr."
+                defaultValue="1"
+                onChange={(e) => setContracts(e.target.value)}
+                required
+              />
               <FieldError message={state.fieldErrors?.contracts} />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label htmlFor="premium">Prämie je Aktie</Label>
-              <NumberInput id="premium" name="premium" unit={ccy} required />
+              <Label htmlFor="premium">
+                Prämie je Aktie
+                <InfoTip text="Prämie pro Aktie (wie im Broker angezeigt), nicht der Gesamtbetrag. Ein Kontrakt umfasst 100 Aktien." />
+              </Label>
+              <NumberInput
+                id="premium"
+                name="premium"
+                unit={ccy}
+                onChange={(e) => setPremium(e.target.value)}
+                required
+              />
               <FieldError message={state.fieldErrors?.premium} />
             </div>
             <div className="flex items-end">
-              <p className="text-xs text-zinc-500">
-                Gesamtprämie = Prämie × Kontrakte × 100 (Multiplier).
+              <p className="text-sm text-zinc-300">
+                Gesamtprämie:{" "}
+                <span className="font-semibold text-emerald-400">{fmtTotal}</span>
+                <span className="ml-1 text-xs text-zinc-500">
+                  ({parse(premium) || 0} × {parse(contracts) || 0} × 100)
+                </span>
               </p>
             </div>
           </div>

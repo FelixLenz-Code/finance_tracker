@@ -1,14 +1,20 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { Badge, Button, Input, NumberInput, Label, Select, cn } from "@/components/ui";
 import { money, num, fmtDate, pnlClass } from "@/lib/format";
 import {
   closePositionAction,
   expireOptionAction,
   assignOptionAction,
+  saveTransactionNote,
+  undoRollAction,
+  reopenOptionAction,
 } from "../trades/actions";
 import { RollForm } from "./RollForm";
+import { EditForm } from "./EditForm";
+import { DeleteEntryButton } from "./DeleteEntryButton";
+import { ActionButton } from "./ActionButton";
 import type { Row } from "./types";
 
 type Account = { id: string; name: string };
@@ -45,6 +51,7 @@ export function OverviewTable({
 
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [action, setAction] = useState<{ id: string; type: string } | null>(null);
+  const [notesRow, setNotesRow] = useState<Row | null>(null);
 
   function toggleAcc(id: string) {
     setAccFilter((prev) => {
@@ -227,11 +234,87 @@ export function OverviewTable({
                   setAction={(type) =>
                     setAction((cur) => (cur?.id === r.id && cur.type === type ? null : { id: r.id, type }))
                   }
+                  clearAction={() => setAction(null)}
+                  onShowNotes={() => setNotesRow(r)}
                 />
               );
             })}
           </tbody>
         </table>
+      </div>
+
+      {notesRow && <NotesModal row={notesRow} onClose={() => setNotesRow(null)} />}
+    </div>
+  );
+}
+
+function NotesModal({ row, onClose }: { row: Row; onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="max-h-[80vh] w-full max-w-md overflow-y-auto rounded-xl border border-zinc-700 bg-zinc-900 p-5 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="font-medium">
+            Notizen · {row.symbol}
+            {row.kind === "OPTION" ? ` ${row.optionRight ?? ""} ${row.strike ?? ""}` : ""}
+          </h3>
+          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-100" aria-label="Schließen">
+            ✕
+          </button>
+        </div>
+        <div className="space-y-3">
+          {row.transactions.map((t) => (
+            <NoteEditor
+              key={t.id}
+              txnId={t.id}
+              initial={t.note ?? ""}
+              label={`${txnLabel(t.type)} · ${fmtDate(t.tradeDate)}`}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NoteEditor({ txnId, initial, label }: { txnId: string; initial: string; label: string }) {
+  const [val, setVal] = useState(initial);
+  const [pending, start] = useTransition();
+  const [saved, setSaved] = useState(false);
+  const dirty = val !== initial;
+
+  function save() {
+    start(async () => {
+      await saveTransactionNote(txnId, val);
+      setSaved(true);
+    });
+  }
+
+  return (
+    <div className="rounded-lg border border-white/5 bg-zinc-950/50 p-3">
+      <p className="mb-1.5 flex items-center gap-2 text-xs text-zinc-500">
+        <Badge color="zinc">{label}</Badge>
+      </p>
+      <textarea
+        value={val}
+        onChange={(e) => {
+          setVal(e.target.value);
+          setSaved(false);
+        }}
+        rows={2}
+        placeholder="Notiz…"
+        className="w-full resize-y rounded-md border border-white/10 bg-zinc-950/60 px-2.5 py-1.5 text-sm text-zinc-100 placeholder-zinc-600 outline-none focus:border-emerald-500/60 focus:ring-2 focus:ring-emerald-500/20"
+      />
+      <div className="mt-1.5 flex items-center gap-2">
+        <Button type="button" variant="secondary" onClick={save} disabled={pending || !dirty}>
+          {pending ? "Speichern…" : "Speichern"}
+        </Button>
+        {saved && !dirty && <span className="text-xs text-emerald-400">gespeichert ✓</span>}
       </div>
     </div>
   );
@@ -253,6 +336,8 @@ function FragmentRow({
   onToggleExpand,
   action,
   setAction,
+  clearAction,
+  onShowNotes,
 }: {
   r: Row;
   isOpen: boolean;
@@ -261,26 +346,46 @@ function FragmentRow({
   onToggleExpand: () => void;
   action: string | null;
   setAction: (t: string) => void;
+  clearAction: () => void;
+  onShowNotes: () => void;
 }) {
   return (
     <>
       <tr className="border-b border-zinc-800/60 hover:bg-zinc-900/40">
         <td className={td}>
-          {r.isChain && (
-            <button onClick={onToggleExpand} className="text-zinc-400 hover:text-zinc-100">
-              {isExp ? "▼" : "▶"}
-            </button>
-          )}
+          <button onClick={onToggleExpand} className="text-zinc-400 hover:text-zinc-100" title="Details ein-/ausklappen">
+            {isExp ? "▼" : "▶"}
+          </button>
         </td>
         <td className={td}>{r.accountName}</td>
         <td className={td}>
-          <div className="font-medium">{r.symbol}</div>
+          <div className="flex items-center gap-1.5 font-medium">
+            {r.symbol}
+            {r.hasNotes && (
+              <button
+                type="button"
+                onClick={onShowNotes}
+                title="Notizen anzeigen"
+                aria-label="Notizen anzeigen"
+                className="text-amber-400/80 transition-colors hover:text-amber-300"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <path d="M14 2v6h6M9 13h6M9 17h4" />
+                </svg>
+              </button>
+            )}
+          </div>
           <div className="text-xs text-zinc-500">
             {r.exchange} {r.isChain && <Badge color="blue">Roll-Kette · {r.legs.length}</Badge>}
           </div>
         </td>
         <td className={td}>
-          {r.kind === "OPTION" ? optionLabel(r) : r.direction === "LONG" ? "Long" : "Short"}
+          {r.kind === "OPTION"
+            ? optionLabel(r)
+            : r.direction === "SHORT"
+              ? "Aktie einzeln (Short)"
+              : "Aktie einzeln"}
         </td>
         <td className={td}>{num(r.qty, 4)}</td>
         <td className={td}>{money(r.avgOpenPrice, r.currency)}</td>
@@ -292,21 +397,49 @@ function FragmentRow({
         </td>
         <td className={td}>{fmtDate(r.openedAt)}</td>
         <td className={td}>
-          {isOpen ? (
-            <div className="flex flex-wrap gap-1">
-              <ActBtn label="Schließen" onClick={() => setAction("close")} />
-              {r.kind === "OPTION" && <ActBtn label="Rollen" onClick={() => setAction("roll")} />}
-              {r.kind === "OPTION" && <ActBtn label="Verfall" onClick={() => setAction("expire")} />}
-              {r.kind === "OPTION" && <ActBtn label="Andienung" onClick={() => setAction("assign")} />}
-            </div>
-          ) : (
-            <span className="text-xs text-zinc-600">—</span>
-          )}
+          <div className="flex flex-wrap gap-1">
+            {isOpen && (
+              <>
+                <ActBtn
+                  label={r.kind === "STOCK" ? "Verkaufen" : "Schließen"}
+                  onClick={() => setAction("close")}
+                />
+                {r.kind === "OPTION" && <ActBtn label="Rollen" onClick={() => setAction("roll")} />}
+                {r.kind === "OPTION" && <ActBtn label="Verfall" onClick={() => setAction("expire")} />}
+                {r.kind === "OPTION" && <ActBtn label="Andienung" onClick={() => setAction("assign")} />}
+              </>
+            )}
+            {r.status === "OPEN" && r.transactions.length === 1 && (
+              <ActBtn label="Bearbeiten" onClick={() => setAction("edit")} />
+            )}
+            {r.isChain && r.status === "OPEN" && (
+              <ActionButton
+                action={undoRollAction}
+                positionId={r.id}
+                label="Roll rückgängig"
+                confirmText="Letzten Roll rückgängig machen? Die neue Position wird gelöscht und die vorherige wieder geöffnet."
+              />
+            )}
+            {r.kind === "OPTION" && ["CLOSED", "EXPIRED", "ASSIGNED"].includes(r.status) && (
+              <ActionButton
+                action={reopenOptionAction}
+                positionId={r.id}
+                label="Wieder öffnen"
+                confirmText="Diese Option wieder öffnen? Die Abschluss-Buchung (Schließen/Verfall/Andienung) wird rückgängig gemacht."
+              />
+            )}
+            <DeleteEntryButton
+              positionId={r.id}
+              label={`${r.symbol}${r.kind === "OPTION" ? ` ${r.optionRight ?? ""} ${r.strike ?? ""}` : ""}`}
+              legs={r.legs.length}
+            />
+          </div>
         </td>
       </tr>
 
-      {/* Roll-Kette */}
+      {/* Roll-Kette (Legs) */}
       {isExp &&
+        r.isChain &&
         r.legs.map((leg) => (
           <tr key={leg.id} className="border-b border-zinc-800/40 bg-zinc-950/40 text-xs">
             <td className={td}></td>
@@ -324,17 +457,57 @@ function FragmentRow({
           </tr>
         ))}
 
+      {/* Transaktions-Historie inkl. Notizen */}
+      {isExp && (
+        <tr className="border-b border-zinc-800 bg-zinc-950/40">
+          <td className={td}></td>
+          <td className={td} colSpan={9}>
+            <div className="py-1">
+              <p className="mb-1 text-xs font-medium text-zinc-400">Transaktionen</p>
+              <div className="space-y-1">
+                {r.transactions.map((t) => (
+                  <div key={t.id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
+                    <span className="text-zinc-500">{fmtDate(t.tradeDate)}</span>
+                    <Badge color="zinc">{txnLabel(t.type)}</Badge>
+                    <span className="text-zinc-400">
+                      {num(t.qty, 4)} × {money(t.price, t.currency)}
+                      {t.fees ? ` · Geb. ${money(t.fees, t.currency)}` : ""}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </td>
+        </tr>
+      )}
+
       {/* Aktionspanel */}
       {action && (
         <tr className="border-b border-zinc-800 bg-zinc-950/60">
           <td className={td}></td>
           <td className={td} colSpan={9}>
-            <ActionPanel r={r} action={action} />
+            <ActionPanel r={r} action={action} onDone={clearAction} />
           </td>
         </tr>
       )}
     </>
   );
+}
+
+function txnLabel(type: string): string {
+  const map: Record<string, string> = {
+    BUY: "Kauf",
+    SELL: "Verkauf",
+    SELL_TO_OPEN: "STO (Short eröffnet)",
+    BUY_TO_OPEN: "BTO (Long eröffnet)",
+    BUY_TO_CLOSE: "BTC (Short geschlossen)",
+    SELL_TO_CLOSE: "STC (Long geschlossen)",
+    ASSIGNMENT: "Andienung",
+    EXPIRATION: "Verfall",
+    DIVIDEND: "Dividende",
+    FEE: "Gebühr",
+  };
+  return map[type] ?? type;
 }
 
 function ActBtn({ label, onClick }: { label: string; onClick: () => void }) {
@@ -348,22 +521,26 @@ function ActBtn({ label, onClick }: { label: string; onClick: () => void }) {
   );
 }
 
-function ActionPanel({ r, action }: { r: Row; action: string }) {
+function ActionPanel({ r, action, onDone }: { r: Row; action: string; onDone: () => void }) {
+  if (action === "edit") {
+    return <EditForm r={r} />;
+  }
   if (action === "roll" && r.kind === "OPTION") {
     return <RollForm positionId={r.id} currency={r.currency} currentStrike={r.strike} />;
   }
   if (action === "close") {
+    const isStock = r.kind === "STOCK";
     return (
-      <form action={closePositionAction} className="flex flex-wrap items-end gap-3">
+      <form action={closePositionAction} onSubmit={onDone} className="flex flex-wrap items-end gap-3">
         <input type="hidden" name="positionId" value={r.id} />
-        {r.kind === "STOCK" && (
+        {isStock && (
           <Field label="Anzahl">
             <div className="w-28">
               <NumberInput name="qty" unit="Stück" defaultValue={num(r.qty, 4)} />
             </div>
           </Field>
         )}
-        <Field label={r.kind === "OPTION" ? "Schluss-Prämie" : "Kurs je Stück"}>
+        <Field label={isStock ? "Verkaufskurs je Stück" : "Schluss-Prämie"}>
           <div className="w-36">
             <NumberInput name="price" unit={r.currency} required />
           </div>
@@ -376,13 +553,13 @@ function ActionPanel({ r, action }: { r: Row; action: string }) {
         <Field label="Datum">
           <Input name="tradeDate" type="date" defaultValue={today()} />
         </Field>
-        <Button type="submit" variant="secondary">Schließen</Button>
+        <Button type="submit" variant="secondary">{isStock ? "Verkaufen" : "Schließen"}</Button>
       </form>
     );
   }
   if (action === "expire") {
     return (
-      <form action={expireOptionAction} className="flex items-end gap-3">
+      <form action={expireOptionAction} onSubmit={onDone} className="flex items-end gap-3">
         <input type="hidden" name="positionId" value={r.id} />
         <Field label="Datum">
           <Input name="tradeDate" type="date" defaultValue={r.expiry?.slice(0, 10) ?? today()} />
@@ -393,7 +570,7 @@ function ActionPanel({ r, action }: { r: Row; action: string }) {
   }
   if (action === "assign") {
     return (
-      <form action={assignOptionAction} className="flex items-end gap-3">
+      <form action={assignOptionAction} onSubmit={onDone} className="flex items-end gap-3">
         <input type="hidden" name="positionId" value={r.id} />
         <Field label="Datum">
           <Input name="tradeDate" type="date" defaultValue={r.expiry?.slice(0, 10) ?? today()} />

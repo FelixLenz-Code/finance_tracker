@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
+import { toNum } from "@/lib/format";
 import type { InstrumentType } from "@prisma/client";
 import {
   applyStockTrade,
@@ -175,6 +176,233 @@ export async function closePositionAction(formData: FormData): Promise<void> {
   }
   revalidatePath("/overview");
   revalidatePath("/");
+}
+
+/**
+ * Eintrag bearbeiten — nur im Anfangszustand (Status OPEN, genau eine Buchung),
+ * also bevor geschlossen/gerollt/teilverkauft wurde. Überschreibt Position + Buchung.
+ */
+export async function editPosition(
+  _prev: TradeState,
+  formData: FormData,
+): Promise<TradeState> {
+  const user = await requireUser();
+  const positionId = String(formData.get("positionId") ?? "");
+  const pos = await prisma.position.findFirst({
+    where: { id: positionId, account: { userId: user.id } },
+    include: { transactions: true },
+  });
+  if (!pos) return { error: "Position nicht gefunden." };
+  if (pos.status !== "OPEN" || pos.transactions.length !== 1) {
+    return {
+      error:
+        "Nur direkt nach dem Anlegen editierbar (noch keine weiteren Buchungen). Sonst bitte den Eintrag löschen und neu erfassen.",
+    };
+  }
+  const txn = pos.transactions[0];
+  const fees = num(formData.get("fees")) || 0;
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+  const tradeDate = new Date(String(formData.get("tradeDate") ?? "") || pos.openedAt.toISOString());
+
+  if (pos.kind === "STOCK") {
+    const parsed = stockSchema.safeParse({
+      side: formData.get("side"),
+      qty: num(formData.get("qty")),
+      price: num(formData.get("price")),
+    });
+    if (!parsed.success) return { fieldErrors: zerr(parsed.error) };
+    await prisma.$transaction([
+      prisma.position.update({
+        where: { id: pos.id },
+        data: {
+          direction: parsed.data.side === "BUY" ? "LONG" : "SHORT",
+          qty: parsed.data.qty,
+          avgOpenPrice: parsed.data.price,
+          openedAt: tradeDate,
+          realizedPnl: -fees,
+        },
+      }),
+      prisma.transaction.update({
+        where: { id: txn.id },
+        data: { type: parsed.data.side, qty: parsed.data.qty, price: parsed.data.price, fees, tradeDate, notes },
+      }),
+    ]);
+  } else {
+    const expiryRaw = String(formData.get("expiry") ?? "");
+    if (!expiryRaw) return { fieldErrors: { expiry: "Verfall erforderlich" } };
+    const parsed = optionSchema.safeParse({
+      direction: formData.get("direction"),
+      right: formData.get("right"),
+      strike: num(formData.get("strike")),
+      contracts: num(formData.get("contracts")),
+      premium: num(formData.get("premium")),
+    });
+    if (!parsed.success) return { fieldErrors: zerr(parsed.error) };
+    await prisma.$transaction([
+      prisma.position.update({
+        where: { id: pos.id },
+        data: {
+          direction: parsed.data.direction,
+          optionRight: parsed.data.right,
+          strike: parsed.data.strike,
+          expiry: new Date(expiryRaw),
+          qty: parsed.data.contracts,
+          avgOpenPrice: parsed.data.premium,
+          openedAt: tradeDate,
+          realizedPnl: -fees,
+        },
+      }),
+      prisma.transaction.update({
+        where: { id: txn.id },
+        data: {
+          type: parsed.data.direction === "LONG" ? "BUY_TO_OPEN" : "SELL_TO_OPEN",
+          qty: parsed.data.contracts,
+          price: parsed.data.premium,
+          fees,
+          tradeDate,
+          notes,
+        },
+      }),
+    ]);
+  }
+  revalidatePath("/overview");
+  revalidatePath("/");
+  revalidatePath("/cash");
+  return {};
+}
+
+/** Letzten Roll rückgängig machen: neueste (offene) Position der Kette löschen, Vorgänger wieder öffnen. */
+export async function undoRollAction(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const positionId = String(formData.get("positionId") ?? "");
+  const head = await prisma.position.findFirst({
+    where: { id: positionId, account: { userId: user.id }, prevPositionId: { not: null } },
+    include: { transactions: true, prev: { include: { transactions: true } } },
+  });
+  if (!head || !head.prev) return;
+  const prev = head.prev;
+
+  await prisma.$transaction(async (tx) => {
+    // Neue (gerollte) Position + deren Buchungen entfernen
+    await tx.transaction.deleteMany({ where: { positionId: head.id } });
+    await tx.position.update({ where: { id: head.id }, data: { prevPositionId: null } });
+    await tx.position.delete({ where: { id: head.id } });
+
+    // Vorgänger wieder öffnen: Roll-Close-Buchung entfernen, Anfangszustand herstellen
+    const openTxn = prev.transactions.find(
+      (t) => t.type === "BUY_TO_OPEN" || t.type === "SELL_TO_OPEN",
+    );
+    await tx.transaction.deleteMany({
+      where: { positionId: prev.id, type: { in: ["BUY_TO_CLOSE", "SELL_TO_CLOSE"] } },
+    });
+    await tx.position.update({
+      where: { id: prev.id },
+      data: {
+        status: "OPEN",
+        closedAt: null,
+        qty: openTxn ? openTxn.qty : prev.qty,
+        avgOpenPrice: openTxn ? openTxn.price : prev.avgOpenPrice,
+        realizedPnl: openTxn ? -(toNum(openTxn.fees) + toNum(openTxn.commission)) : 0,
+      },
+    });
+  });
+  revalidatePath("/overview");
+  revalidatePath("/");
+  revalidatePath("/cash");
+}
+
+/** Geschlossene/verfallene/angediente Option wieder öffnen (Misklick rückgängig). */
+export async function reopenOptionAction(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const positionId = String(formData.get("positionId") ?? "");
+  const pos = await prisma.position.findFirst({
+    where: {
+      id: positionId,
+      account: { userId: user.id },
+      kind: "OPTION",
+      status: { in: ["CLOSED", "EXPIRED", "ASSIGNED"] },
+    },
+    include: { transactions: true, instrument: true, next: true },
+  });
+  if (!pos || pos.next) return; // gerollte Positionen nicht hier behandeln
+
+  await prisma.$transaction(async (tx) => {
+    // Abschluss-Buchungen entfernen
+    await tx.transaction.deleteMany({
+      where: {
+        positionId: pos.id,
+        type: { in: ["BUY_TO_CLOSE", "SELL_TO_CLOSE", "EXPIRATION", "ASSIGNMENT"] },
+      },
+    });
+
+    // Bei Andienung erzeugtes Aktien-Leg entfernen (best effort: eigenständige Position).
+    if (pos.status === "ASSIGNED") {
+      const legNotePrefix = `Aus Andienung ${pos.instrument.symbol}`;
+      const legTxns = await tx.transaction.findMany({
+        where: { accountId: pos.accountId, notes: { startsWith: legNotePrefix } },
+        select: { id: true, positionId: true },
+      });
+      for (const leg of legTxns) {
+        await tx.transaction.delete({ where: { id: leg.id } });
+        if (leg.positionId) {
+          const remaining = await tx.transaction.count({ where: { positionId: leg.positionId } });
+          if (remaining === 0) await tx.position.delete({ where: { id: leg.positionId } });
+        }
+      }
+    }
+
+    const openTxn = pos.transactions.find(
+      (t) => t.type === "BUY_TO_OPEN" || t.type === "SELL_TO_OPEN",
+    );
+    await tx.position.update({
+      where: { id: pos.id },
+      data: {
+        status: "OPEN",
+        closedAt: null,
+        qty: openTxn ? openTxn.qty : pos.qty,
+        avgOpenPrice: openTxn ? openTxn.price : pos.avgOpenPrice,
+        realizedPnl: openTxn ? -(toNum(openTxn.fees) + toNum(openTxn.commission)) : 0,
+      },
+    });
+  });
+  revalidatePath("/overview");
+  revalidatePath("/");
+  revalidatePath("/cash");
+}
+
+/** Notiz einer Transaktion bearbeiten (leer = entfernen). */
+export async function saveTransactionNote(transactionId: string, note: string): Promise<void> {
+  const user = await requireUser();
+  await prisma.transaction.updateMany({
+    where: { id: transactionId, account: { userId: user.id } },
+    data: { notes: note.trim() || null },
+  });
+  revalidatePath("/overview");
+  revalidatePath("/cash");
+}
+
+/** Eintrag löschen: Position + ihre Transaktionen; bei Roll-Ketten die ganze Kette. */
+export async function deletePosition(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const positionId = String(formData.get("positionId") ?? "");
+  const pos = await assertPosition(user.id, positionId);
+
+  const where = pos.chainId
+    ? { chainId: pos.chainId, account: { userId: user.id } }
+    : { id: pos.id, account: { userId: user.id } };
+
+  await prisma.$transaction(async (tx) => {
+    const positions = await tx.position.findMany({ where, select: { id: true } });
+    const ids = positions.map((p) => p.id);
+    await tx.transaction.deleteMany({ where: { positionId: { in: ids } } });
+    // Self-FK (prevPositionId) lösen, dann Positionen entfernen.
+    await tx.position.updateMany({ where: { id: { in: ids } }, data: { prevPositionId: null } });
+    await tx.position.deleteMany({ where: { id: { in: ids } } });
+  });
+
+  revalidatePath("/overview");
+  revalidatePath("/");
+  revalidatePath("/stats");
 }
 
 export async function expireOptionAction(formData: FormData): Promise<void> {

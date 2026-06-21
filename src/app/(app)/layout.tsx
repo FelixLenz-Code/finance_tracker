@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { Nav } from "@/components/nav";
 import { Logo } from "@/components/Logo";
@@ -19,7 +20,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
 
         <div className="mt-4 border-t border-white/5 pt-4">
-          <div className="flex items-center gap-3 rounded-lg px-2 py-2">
+          <Link
+            href="/settings"
+            className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-white/5"
+            title="Einstellungen öffnen"
+          >
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-xs font-semibold text-emerald-300 ring-1 ring-inset ring-emerald-500/25">
               {initials}
             </div>
@@ -27,7 +32,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <p className="truncate text-sm font-medium text-zinc-200">{user.name ?? user.email}</p>
               <p className="truncate text-xs text-zinc-500">{user.email}</p>
             </div>
-          </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-zinc-500">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+          </Link>
           <form action={logoutAction} className="mt-1">
             <button className="w-full rounded-lg px-2 py-2 text-left text-sm text-zinc-400 transition-colors hover:bg-white/5 hover:text-red-400">
               Abmelden

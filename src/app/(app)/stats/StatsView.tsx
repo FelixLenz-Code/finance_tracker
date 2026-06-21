@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Card, Select, Label, cn } from "@/components/ui";
+import { Card, Select, Label, InfoTip, cn } from "@/components/ui";
 import { num, pnlClass } from "@/lib/format";
 
 export type StatRow = {
@@ -139,7 +139,9 @@ export function StatsView({
       {/* Übersichtskarten */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         <Card>
-          <p className="text-sm text-zinc-400">Realisierter P&amp;L</p>
+          <p className="flex items-center text-sm text-zinc-400">
+            Realisierter P&amp;L<InfoTip text="Summe realisierter Gewinne/Verluste (geschlossene Positionen, inkl. Gebühren), je Währung getrennt." />
+          </p>
           <p className="mt-1 text-lg"><CcyAmounts map={overall.realizedByCcy} /></p>
         </Card>
         <Card>
@@ -147,15 +149,21 @@ export function StatsView({
           <p className="mt-1 text-2xl font-bold">{overall.open}</p>
         </Card>
         <Card>
-          <p className="text-sm text-zinc-400">Abgeschlossen</p>
+          <p className="flex items-center text-sm text-zinc-400">
+            Abgeschlossen<InfoTip text="Anzahl nicht mehr offener Positionen (geschlossen, verfallen, angedient, gerollt)." />
+          </p>
           <p className="mt-1 text-2xl font-bold">{overall.completed}</p>
         </Card>
         <Card>
-          <p className="text-sm text-zinc-400">Trefferquote</p>
+          <p className="flex items-center text-sm text-zinc-400">
+            Trefferquote<InfoTip text="Anteil abgeschlossener Positionen mit positivem realisiertem P&L." />
+          </p>
           <p className="mt-1 text-2xl font-bold">{winRate(overall)}</p>
         </Card>
         <Card>
-          <p className="text-sm text-zinc-400">Gerollt</p>
+          <p className="flex items-center text-sm text-zinc-400">
+            Gerollt<InfoTip text="Anzahl Positionen, die in eine neue gerollt wurden (Status ROLLED)." />
+          </p>
           <p className="mt-1 text-2xl font-bold">{overall.rolled}</p>
         </Card>
       </div>
