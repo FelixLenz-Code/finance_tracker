@@ -1,0 +1,44 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tracker
+      POSTGRES_PASSWORD: tracker
+      POSTGRES_DB: tracker
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tracker -d tracker"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgresql://tracker:tracker@db:5432/tracker?schema=public"
+      APP_URL: "${APP_URL:-http://localhost:3000}"
+      AUTH_SECRET: "${AUTH_SECRET:?set AUTH_SECRET in .env}"
+      TWELVEDATA_API_KEY: "${TWELVEDATA_API_KEY:-}"
+      SMTP_HOST: "${SMTP_HOST:-}"
+      SMTP_PORT: "${SMTP_PORT:-587}"
+      SMTP_USER: "${SMTP_USER:-}"
+      SMTP_PASSWORD: "${SMTP_PASSWORD:-}"
+      SMTP_FROM: "${SMTP_FROM:-Trade Tracker <no-reply@example.com>}"
+      TOTP_ISSUER: "${TOTP_ISSUER:-Trade Tracker}"
+    ports:
+      # Host-Port via APP_PORT überschreibbar (Default 3000). Auf diesem Rechner
+      # belegt z.B. open-webui bereits 3000 → in .env APP_PORT=3100 setzen.
+      - "${APP_PORT:-3000}:3000"
+    # Migration vor Start anwenden, dann Server starten
+    command: sh -c "npx prisma migrate deploy && npx next start -H 0.0.0.0 -p 3000"
+
+volumes:
+  db_data:

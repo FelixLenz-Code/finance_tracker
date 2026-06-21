@@ -1,0 +1,231 @@
+// Trade-Tracker — Prisma schema
+// Datenmodell: User/Auth, Account (Depot), Instrument (Stammdaten-Cache),
+// Position (Lebenszyklus), Transaction (Fill), Roll-Ketten via chainId, FxRate.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  // Prisma 7: Connection-URL liegt in prisma.config.ts; Client nutzt @prisma/adapter-pg.
+}
+
+// ---------- Auth ----------
+
+enum Role {
+  ADMIN
+  USER
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String?
+  passwordHash String
+  role         Role      @default(USER)
+  emailVerified DateTime?
+  totpEnabled  Boolean   @default(false)
+  totpSecret   String? // verschlüsselt/Base32, nur gesetzt wenn 2FA eingerichtet
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  accounts    Account[]
+  sessions    Session[]
+  backupCodes BackupCode[]
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String   @unique // SHA-256 des Cookie-Tokens
+  pending2fa Boolean  @default(false) // true zwischen Passwort-Schritt und TOTP-Schritt
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+}
+
+model BackupCode {
+  id       String    @id @default(cuid())
+  userId   String
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash String // Argon2-Hash eines Einmal-Backup-Codes
+  usedAt   DateTime?
+
+  @@index([userId])
+}
+
+enum TokenPurpose {
+  EMAIL_VERIFY
+  PASSWORD_RESET
+}
+
+model VerificationToken {
+  id         String       @id @default(cuid())
+  identifier String // E-Mail
+  tokenHash  String       @unique
+  purpose    TokenPurpose
+  expiresAt  DateTime
+  createdAt  DateTime     @default(now())
+
+  @@index([identifier])
+}
+
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  email     String
+  ip        String
+  success   Boolean
+  createdAt DateTime @default(now())
+
+  @@index([email, createdAt])
+  @@index([ip, createdAt])
+}
+
+// ---------- Domäne ----------
+
+model Account {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  broker       String?
+  baseCurrency String   @default("USD")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  positions    Position[]
+  transactions Transaction[]
+
+  @@index([userId])
+}
+
+enum InstrumentType {
+  STOCK
+  ETF
+  INDEX
+  FUND
+  OTHER
+}
+
+model Instrument {
+  id        String         @id @default(cuid())
+  symbol    String
+  exchange  String
+  mic       String?
+  name      String
+  type      InstrumentType @default(STOCK)
+  currency  String         @default("USD")
+  isin      String?
+  country   String?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  positions Position[]
+
+  @@unique([symbol, exchange])
+}
+
+enum PositionKind {
+  STOCK
+  OPTION
+}
+
+enum Direction {
+  LONG
+  SHORT
+}
+
+enum OptionRight {
+  CALL
+  PUT
+}
+
+enum PositionStatus {
+  OPEN
+  CLOSED
+  ROLLED
+  ASSIGNED
+  EXPIRED
+}
+
+model Position {
+  id           String         @id @default(cuid())
+  accountId    String
+  account      Account        @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  instrumentId String
+  instrument   Instrument     @relation(fields: [instrumentId], references: [id])
+  kind         PositionKind
+  direction    Direction
+  status       PositionStatus @default(OPEN)
+  openedAt     DateTime
+  closedAt     DateTime?
+  qty          Decimal        @db.Decimal(18, 6) // Aktien: Stück, Optionen: Kontrakte
+  avgOpenPrice Decimal        @db.Decimal(18, 6)
+  realizedPnl  Decimal        @default(0) @db.Decimal(18, 6)
+  currency     String         @default("USD")
+
+  // Options-spezifisch
+  optionRight OptionRight?
+  strike      Decimal?     @db.Decimal(18, 6)
+  expiry      DateTime?
+  multiplier  Int? // i.d.R. 100
+
+  // Roll-Kette
+  chainId        String?
+  prevPositionId String?   @unique
+  prev           Position? @relation("Roll", fields: [prevPositionId], references: [id])
+  next           Position? @relation("Roll")
+
+  transactions Transaction[]
+
+  @@index([accountId])
+  @@index([chainId])
+  @@index([instrumentId])
+}
+
+enum TxnType {
+  BUY
+  SELL
+  SELL_TO_OPEN
+  BUY_TO_CLOSE
+  BUY_TO_OPEN
+  SELL_TO_CLOSE
+  ASSIGNMENT
+  EXPIRATION
+  DIVIDEND
+  FEE
+}
+
+model Transaction {
+  id         String   @id @default(cuid())
+  accountId  String
+  account    Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  positionId String?
+  position   Position? @relation(fields: [positionId], references: [id], onDelete: SetNull)
+  type       TxnType
+  tradeDate  DateTime
+  qty        Decimal  @db.Decimal(18, 6)
+  price      Decimal  @db.Decimal(18, 6)
+  fees       Decimal  @default(0) @db.Decimal(18, 6)
+  commission Decimal  @default(0) @db.Decimal(18, 6)
+  currency   String   @default("USD")
+  notes      String?
+  createdAt  DateTime @default(now())
+
+  @@index([accountId])
+  @@index([positionId])
+  @@index([tradeDate])
+}
+
+model FxRate {
+  id    String   @id @default(cuid())
+  base  String
+  quote String
+  rate  Decimal  @db.Decimal(18, 8)
+  asOf  DateTime @default(now())
+
+  @@unique([base, quote, asOf])
+}

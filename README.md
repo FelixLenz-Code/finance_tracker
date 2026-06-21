@@ -1,36 +1,68 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Trade Tracker
 
-## Getting Started
+Selbst-gehosteter Tracker für **Aktien- und Optionstrades** über mehrere Depots.
+Manuelle, effiziente Erfassung mit Ticker-**Auto-Fill** (Stammdaten via Twelve Data),
+**Optionen** (Long/Short Call/Put) inkl. **Rollen** (Bündelung gerollter Optionen zu
+Ketten) und einer **filterbaren Übersicht**.
 
-First, run the development server:
+## Stack
+
+- **Next.js 16** (App Router, TypeScript) · **PostgreSQL** + **Prisma 7** (pg-Adapter)
+- Eigene **DB-Session-Auth**: Multi-User + Rollen, Argon2-Hashing, optionales **2FA/TOTP**
+  (QR + Backup-Codes), Login-Rate-Limiting, E-Mail-Verifizierung & Passwort-Reset
+- Tailwind CSS v4, eigene UI-Komponenten
+
+> Hinweis: **Preise werden nicht** über die API geladen — du trägst deinen Ausführungspreis
+> manuell ein. Twelve Data wird nur für die **Ticker-Suche** (`symbol_search`) genutzt.
+
+## Voraussetzungen
+
+- **Node.js ≥ 20.9** (z.B. via `nvm install 20`) — Next 16 läuft nicht auf Node 18
+- **Docker** (für PostgreSQL bzw. das komplette Deployment)
+
+## Lokale Entwicklung
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env          # AUTH_SECRET setzen (openssl rand -base64 48)
+                              # optional: TWELVEDATA_API_KEY für Ticker-Suche
+docker compose up -d db       # PostgreSQL starten
+npm install
+npm run db:migrate            # Schema anwenden
+npm run dev                   # http://localhost:3000  (PORT=3100 falls 3000 belegt)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Der **erste registrierte Nutzer wird automatisch Admin** und ist ohne E-Mail-Server
+sofort aktiv (ohne SMTP gelten Nutzer als verifiziert; Mail-Links landen im Server-Log).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Deployment (Docker)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+cp .env.example .env          # AUTH_SECRET + ggf. APP_PORT, SMTP_*, TWELVEDATA_API_KEY
+docker compose up -d --build  # startet db + app, wendet Migrationen automatisch an
+```
 
-## Learn More
+Die App ist für den Betrieb im internen Netz gedacht (Zugriff von außen via VPN).
+Ist Port 3000 belegt, in `.env` `APP_PORT=3100` setzen.
 
-To learn more about Next.js, take a look at the following resources:
+## Nützliche Skripte
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Befehl | Zweck |
+|--------|-------|
+| `npm run db:migrate` | Migration erstellen/anwenden (Dev) |
+| `npm run db:deploy`  | Migrationen anwenden (Prod) |
+| `npm run test:logic` | End-to-End-Test der P&L-/Roll-/Andienungs-Logik gegen die DB |
+| `npm run seed:demo`  | Demo-Daten + Session anlegen (gibt Cookie-Token aus) |
+| `npm run lint`       | ESLint |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Datenmodell (Kurzform)
 
-## Deploy on Vercel
+`User → Account (Depot) → Position → Transaction`. Optionen tragen `right/strike/expiry`;
+gerollte Optionen teilen sich eine `chainId` (alte Position `ROLLED`, neue verweist via
+`prevPositionId`). Die Übersicht zeigt nur die jüngste Position der Kette und klappt die
+Historie samt aggregiertem Ketten-P&L auf.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Bewusste Grenzen
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Keine Live-Kurse / kein automatischer **unrealisierter** P&L (Preise sind manuell).
+- EU-Optionsstammdaten sind per Gratis-API kaum verfügbar → EU-Optionen manuell erfassen
+  (Underlying-Aktie hat Auto-Fill).
