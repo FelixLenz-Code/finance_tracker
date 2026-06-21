@@ -1,9 +1,8 @@
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { Card } from "@/components/ui";
-import { fmtDate } from "@/lib/format";
 import { AccountForm } from "./AccountForm";
-import { DeleteAccountButton } from "./DeleteAccountButton";
+import { AccountRow } from "./AccountRow";
+import { Card } from "@/components/ui";
 
 export default async function AccountsPage() {
   const user = await requireUser();
@@ -27,20 +26,18 @@ export default async function AccountsPage() {
           <p className="text-zinc-400">Noch keine Konten angelegt.</p>
         )}
         {accounts.map((a) => (
-          <Card key={a.id} className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-medium">{a.name}</span>
-                <span className="text-xs text-zinc-500">{a.baseCurrency}</span>
-              </div>
-              <p className="text-sm text-zinc-500">
-                {a.broker ? `${a.broker} · ` : ""}
-                {a._count.positions} Positionen · {a._count.transactions} Transaktionen ·
-                seit {fmtDate(a.createdAt)}
-              </p>
-            </div>
-            <DeleteAccountButton id={a.id} name={a.name} />
-          </Card>
+          <AccountRow
+            key={a.id}
+            account={{
+              id: a.id,
+              name: a.name,
+              broker: a.broker,
+              baseCurrency: a.baseCurrency,
+              positions: a._count.positions,
+              transactions: a._count.transactions,
+              createdAt: a.createdAt.toISOString(),
+            }}
+          />
         ))}
       </div>
     </div>

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Input, Label, Select, Badge, cn } from "@/components/ui";
-import { CURRENCIES } from "@/lib/constants";
+import { CURRENCIES, instrumentTypeLabel } from "@/lib/constants";
 
 export type Picked = {
   symbol: string;
@@ -22,7 +22,13 @@ type ApiHit = {
   mic: string | null;
 };
 
-export function TickerPicker({ defaultCurrency = "USD" }: { defaultCurrency?: string }) {
+export function TickerPicker({
+  defaultCurrency = "USD",
+  onCurrency,
+}: {
+  defaultCurrency?: string;
+  onCurrency?: (currency: string | null) => void;
+}) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ApiHit[]>([]);
   const [open, setOpen] = useState(false);
@@ -68,11 +74,13 @@ export function TickerPicker({ defaultCurrency = "USD" }: { defaultCurrency?: st
     setPicked(hit);
     setOpen(false);
     setQuery("");
+    onCurrency?.(hit.currency);
   }
 
   function clearPick() {
     setPicked(null);
     setManual(false);
+    onCurrency?.(null);
   }
 
   if (picked) {
@@ -85,8 +93,11 @@ export function TickerPicker({ defaultCurrency = "USD" }: { defaultCurrency?: st
             <span className="ml-2 text-sm text-zinc-400">{picked.name}</span>
           </div>
           <div className="flex items-center gap-2">
+            <Badge color={instrumentTypeLabel(picked.type).color}>
+              {instrumentTypeLabel(picked.type).label}
+            </Badge>
             <Badge color="zinc">{picked.exchange}</Badge>
-            <Badge color="blue">{picked.currency}</Badge>
+            <Badge color="zinc">{picked.currency}</Badge>
             <button
               type="button"
               onClick={clearPick}
@@ -114,7 +125,11 @@ export function TickerPicker({ defaultCurrency = "USD" }: { defaultCurrency?: st
           <Input name="symbol" placeholder="Symbol z.B. ALV" required />
           <Input name="exchange" placeholder="Börse z.B. XETRA" required />
           <Input name="name" placeholder="Name" />
-          <Select name="currency" defaultValue={defaultCurrency}>
+          <Select
+            name="currency"
+            defaultValue={defaultCurrency}
+            onChange={(e) => onCurrency?.(e.target.value)}
+          >
             {CURRENCIES.map((c) => (
               <option key={c} value={c}>{c}</option>
             ))}
@@ -135,12 +150,12 @@ export function TickerPicker({ defaultCurrency = "USD" }: { defaultCurrency?: st
 
   return (
     <div key="search" className="space-y-1" ref={boxRef}>
-      <Label htmlFor="ticker-search">Instrument (Ticker eingeben)</Label>
+      <Label htmlFor="ticker-search">Instrument (Ticker, Name oder ISIN)</Label>
       <div className="relative">
         <Input
           id="ticker-search"
           autoComplete="off"
-          placeholder="z.B. AAPL oder SAP"
+          placeholder="z.B. AAPL, Apple oder US0378331005"
           value={query}
           onChange={(e) => {
             const v = e.target.value;
@@ -164,11 +179,14 @@ export function TickerPicker({ defaultCurrency = "USD" }: { defaultCurrency?: st
                     "flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-zinc-800",
                   )}
                 >
-                  <span>
+                  <span className="flex items-center gap-2 truncate">
+                    <Badge color={instrumentTypeLabel(hit.type).color}>
+                      {instrumentTypeLabel(hit.type).label}
+                    </Badge>
                     <span className="font-medium">{hit.symbol}</span>
-                    <span className="ml-2 text-zinc-400">{hit.name}</span>
+                    <span className="truncate text-zinc-400">{hit.name}</span>
                   </span>
-                  <span className="text-xs text-zinc-500">
+                  <span className="shrink-0 text-xs text-zinc-500">
                     {hit.exchange} · {hit.currency}
                   </span>
                 </button>
@@ -177,14 +195,23 @@ export function TickerPicker({ defaultCurrency = "USD" }: { defaultCurrency?: st
           </ul>
         )}
       </div>
-      <div className="flex justify-between text-xs text-zinc-500">
-        <span>{!configured && "Kein Twelve-Data-Key — bitte manuell eingeben."}</span>
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <span className="text-xs text-amber-400/80">
+          {!configured && "Kein Twelve-Data-Key — nutze die manuelle Eingabe."}
+        </span>
         <button
           type="button"
-          onClick={() => setManual(true)}
-          className="hover:text-zinc-300"
+          onClick={() => {
+            setManual(true);
+            onCurrency?.(defaultCurrency);
+          }}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm font-medium text-zinc-200 transition-colors hover:bg-white/10"
         >
-          manuell eingeben
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+          </svg>
+          Manuell eingeben
         </button>
       </div>
     </div>

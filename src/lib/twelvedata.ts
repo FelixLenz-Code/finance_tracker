@@ -26,10 +26,28 @@ type RawHit = {
 
 function mapType(raw?: string): InstrumentType {
   const t = (raw ?? "").toLowerCase();
-  if (t.includes("etf")) return "ETF";
+  // ETF/ETN/ETC/ETP zuerst (sind technisch auch "Fund"/"Trust").
+  if (
+    t.includes("etf") ||
+    t.includes("exchange traded") ||
+    t.includes("exchange-traded") ||
+    t.includes("etn") ||
+    t.includes("etc") ||
+    t.includes("etp")
+  )
+    return "ETF";
   if (t.includes("index")) return "INDEX";
-  if (t.includes("fund")) return "FUND";
-  if (t.includes("stock") || t.includes("share") || t.includes("equity")) return "STOCK";
+  if (t.includes("fund") || t.includes("trust")) return "FUND";
+  if (
+    t.includes("stock") ||
+    t.includes("share") ||
+    t.includes("equity") ||
+    t.includes("depositary") ||
+    t.includes("adr") ||
+    t.includes("reit") ||
+    t.includes("common")
+  )
+    return "STOCK";
   return "OTHER";
 }
 

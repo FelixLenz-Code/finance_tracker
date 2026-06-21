@@ -47,6 +47,58 @@ export function Input({
   );
 }
 
+/** Filtert die Eingabe auf Zahlen (optional ganzzahlig) und zeigt rechts eine Einheit. */
+export function NumberInput({
+  className,
+  unit,
+  integer = false,
+  onChange,
+  ...props
+}: Omit<React.InputHTMLAttributes<HTMLInputElement>, "type"> & {
+  unit?: string;
+  integer?: boolean;
+}) {
+  function sanitize(value: string): string {
+    let s = value.replace(/[^0-9.,]/g, "");
+    if (integer) {
+      s = s.replace(/[.,]/g, "");
+    } else {
+      // nur ein Dezimaltrenner erlaubt
+      const sep = s.search(/[.,]/);
+      if (sep !== -1) {
+        s = s.slice(0, sep + 1) + s.slice(sep + 1).replace(/[.,]/g, "");
+      }
+    }
+    return s;
+  }
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        inputMode={integer ? "numeric" : "decimal"}
+        autoComplete="off"
+        className={cn(
+          "w-full rounded-lg border border-white/10 bg-zinc-950/50 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 outline-none transition-colors focus:border-emerald-500/60 focus:ring-2 focus:ring-emerald-500/20",
+          unit && "pr-14",
+          className,
+        )}
+        onChange={(e) => {
+          const clean = sanitize(e.target.value);
+          if (clean !== e.target.value) e.target.value = clean;
+          onChange?.(e);
+        }}
+        {...props}
+      />
+      {unit && (
+        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-zinc-500">
+          {unit}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function Select({
   className,
   ...props

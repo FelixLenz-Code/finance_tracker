@@ -1,12 +1,20 @@
 import { requireUser } from "@/lib/auth";
-import { twelveDataKeySource } from "@/lib/settings";
+import { twelveDataKeySource, openFigiKeySource } from "@/lib/settings";
 import { Card, Badge } from "@/components/ui";
 import { TwoFactor } from "./TwoFactor";
-import { TwelveDataKey } from "./TwelveDataKey";
+import { ApiKeyField } from "./ApiKeyField";
+import {
+  saveTwelveDataKey,
+  removeTwelveDataKey,
+  saveOpenFigiKey,
+  removeOpenFigiKey,
+} from "./actions";
 
 export default async function SettingsPage() {
   const user = await requireUser();
-  const tdSource = user.role === "ADMIN" ? await twelveDataKeySource() : null;
+  const isAdmin = user.role === "ADMIN";
+  const tdSource = isAdmin ? await twelveDataKeySource() : null;
+  const ofSource = isAdmin ? await openFigiKeySource() : null;
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Einstellungen</h1>
@@ -36,13 +44,38 @@ export default async function SettingsPage() {
         <TwoFactor enabled={user.totpEnabled} />
       </Card>
 
-      {user.role === "ADMIN" && (
+      {isAdmin && (
         <Card>
           <h2 className="mb-1 text-lg font-medium">Marktdaten — Twelve Data</h2>
           <p className="mb-3 text-sm text-zinc-500">
-            API-Key für das Ticker-Auto-Fill (nur Admin).
+            API-Key für das Ticker-Auto-Fill (Symbol/Name/ISIN).
           </p>
-          <TwelveDataKey source={tdSource} />
+          <ApiKeyField
+            source={tdSource}
+            saveAction={saveTwelveDataKey}
+            removeAction={removeTwelveDataKey}
+            inputLabel="Twelve-Data-API-Key"
+            helpUrl="https://twelvedata.com/"
+            helpText="Für die Ticker-Suche."
+          />
+        </Card>
+      )}
+
+      {isAdmin && (
+        <Card>
+          <h2 className="mb-1 text-lg font-medium">WKN-Auflösung — OpenFIGI</h2>
+          <p className="mb-3 text-sm text-zinc-500">
+            Optional. WKN-Suche funktioniert auch ohne Key — ein Key erhöht nur das
+            Rate-Limit.
+          </p>
+          <ApiKeyField
+            source={ofSource}
+            saveAction={saveOpenFigiKey}
+            removeAction={removeOpenFigiKey}
+            inputLabel="OpenFIGI-API-Key"
+            helpUrl="https://www.openfigi.com/api"
+            helpText="Optional, erhöht das Rate-Limit der WKN-Auflösung."
+          />
         </Card>
       )}
     </div>

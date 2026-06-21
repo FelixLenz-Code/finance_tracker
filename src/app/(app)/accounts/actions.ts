@@ -6,7 +6,7 @@ import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { accountSchema, formObject } from "@/lib/validation";
 
-export type AccountState = { error?: string; fieldErrors?: Record<string, string> };
+export type AccountState = { error?: string; fieldErrors?: Record<string, string>; ok?: boolean };
 
 function zerr(err: z.ZodError): Record<string, string> {
   const out: Record<string, string> = {};
@@ -36,6 +36,31 @@ export async function createAccount(
   revalidatePath("/accounts");
   revalidatePath("/");
   return {};
+}
+
+export async function updateAccount(
+  _prev: AccountState,
+  formData: FormData,
+): Promise<AccountState> {
+  const user = await requireUser();
+  const id = String(formData.get("id") ?? "");
+  const parsed = accountSchema.safeParse(formObject(formData));
+  if (!parsed.success) return { fieldErrors: zerr(parsed.error) };
+
+  // Ownership-Check via where-Klausel.
+  const res = await prisma.account.updateMany({
+    where: { id, userId: user.id },
+    data: {
+      name: parsed.data.name,
+      broker: parsed.data.broker || null,
+      baseCurrency: parsed.data.baseCurrency,
+    },
+  });
+  if (res.count === 0) return { error: "Konto nicht gefunden." };
+
+  revalidatePath("/accounts");
+  revalidatePath("/");
+  return { ok: true };
 }
 
 export async function deleteAccount(formData: FormData): Promise<void> {

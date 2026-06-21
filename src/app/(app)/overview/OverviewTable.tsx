@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Badge, Button, Input, Label, Select, cn } from "@/components/ui";
+import { Badge, Button, Input, NumberInput, Label, Select, cn } from "@/components/ui";
 import { money, num, fmtDate, pnlClass } from "@/lib/format";
 import {
   closePositionAction,
@@ -357,15 +357,21 @@ function ActionPanel({ r, action }: { r: Row; action: string }) {
       <form action={closePositionAction} className="flex flex-wrap items-end gap-3">
         <input type="hidden" name="positionId" value={r.id} />
         {r.kind === "STOCK" && (
-          <Field label="Menge">
-            <Input name="qty" defaultValue={num(r.qty, 4)} className="w-28" />
+          <Field label="Anzahl">
+            <div className="w-28">
+              <NumberInput name="qty" unit="Stück" defaultValue={num(r.qty, 4)} />
+            </div>
           </Field>
         )}
-        <Field label={r.kind === "OPTION" ? "Schluss-Prämie" : "Preis"}>
-          <Input name="price" inputMode="decimal" className="w-28" required />
+        <Field label={r.kind === "OPTION" ? "Schluss-Prämie" : "Kurs je Stück"}>
+          <div className="w-36">
+            <NumberInput name="price" unit={r.currency} required />
+          </div>
         </Field>
         <Field label="Gebühren">
-          <Input name="fees" defaultValue="0" className="w-24" />
+          <div className="w-28">
+            <NumberInput name="fees" unit={r.currency} defaultValue="0" />
+          </div>
         </Field>
         <Field label="Datum">
           <Input name="tradeDate" type="date" defaultValue={today()} />

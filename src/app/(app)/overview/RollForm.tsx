@@ -1,13 +1,14 @@
 "use client";
 
 import { useActionState } from "react";
-import { Button, Input, Label, FieldError, FormError } from "@/components/ui";
+import { Button, Input, NumberInput, Label, FieldError, FormError } from "@/components/ui";
 import { rollOptionAction, type TradeState } from "../trades/actions";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
 export function RollForm({
   positionId,
+  currency,
   currentStrike,
 }: {
   positionId: string;
@@ -20,32 +21,26 @@ export function RollForm({
       <input type="hidden" name="positionId" value={positionId} />
       <FormError message={state.error} />
       <div className="flex flex-wrap items-end gap-3">
-        <div>
+        <div className="w-40">
           <Label>Buyback-Prämie (alt)</Label>
-          <Input name="closePremium" inputMode="decimal" className="w-32" required />
+          <NumberInput name="closePremium" unit={currency} required />
         </div>
-        <div>
+        <div className="w-36">
           <Label>Neuer Strike</Label>
-          <Input
-            name="newStrike"
-            inputMode="decimal"
-            defaultValue={currentStrike ?? ""}
-            className="w-28"
-            required
-          />
+          <NumberInput name="newStrike" unit={currency} defaultValue={currentStrike ?? ""} required />
         </div>
         <div>
           <Label>Neuer Verfall</Label>
           <Input name="newExpiry" type="date" required />
           <FieldError message={state.fieldErrors?.newExpiry} />
         </div>
-        <div>
+        <div className="w-36">
           <Label>Neue Prämie</Label>
-          <Input name="newPremium" inputMode="decimal" className="w-28" required />
+          <NumberInput name="newPremium" unit={currency} required />
         </div>
-        <div>
+        <div className="w-28">
           <Label>Gebühren</Label>
-          <Input name="fees" defaultValue="0" className="w-24" />
+          <NumberInput name="fees" unit={currency} defaultValue="0" />
         </div>
         <div>
           <Label>Datum</Label>

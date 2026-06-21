@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { Button, Input, Label, Select, FieldError, FormError, cn } from "@/components/ui";
+import { Button, Input, NumberInput, Label, Select, FieldError, FormError, cn } from "@/components/ui";
 import { TickerPicker } from "@/components/TickerPicker";
 import { createTrade, type TradeState } from "../actions";
 
@@ -12,6 +12,11 @@ const today = () => new Date().toISOString().slice(0, 10);
 export function TradeForm({ accounts }: { accounts: Account[] }) {
   const [state, action, pending] = useActionState(createTrade, {} as TradeState);
   const [kind, setKind] = useState<"STOCK" | "OPTION">("STOCK");
+  const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
+  const [instrCcy, setInstrCcy] = useState<string | null>(null);
+
+  const account = accounts.find((a) => a.id === accountId);
+  const ccy = instrCcy ?? account?.baseCurrency ?? "USD";
 
   return (
     <form action={action} className="space-y-5">
@@ -39,7 +44,13 @@ export function TradeForm({ accounts }: { accounts: Account[] }) {
       {/* Konto */}
       <div>
         <Label htmlFor="accountId">Konto</Label>
-        <Select id="accountId" name="accountId" required defaultValue={accounts[0]?.id}>
+        <Select
+          id="accountId"
+          name="accountId"
+          required
+          value={accountId}
+          onChange={(e) => setAccountId(e.target.value)}
+        >
           {accounts.map((a) => (
             <option key={a.id} value={a.id}>
               {a.name} ({a.baseCurrency})
@@ -49,7 +60,7 @@ export function TradeForm({ accounts }: { accounts: Account[] }) {
       </div>
 
       {/* Instrument */}
-      <TickerPicker defaultCurrency={accounts[0]?.baseCurrency} />
+      <TickerPicker defaultCurrency={account?.baseCurrency} onCurrency={setInstrCcy} />
 
       {kind === "STOCK" ? (
         <div className="grid grid-cols-3 gap-3">
@@ -61,13 +72,13 @@ export function TradeForm({ accounts }: { accounts: Account[] }) {
             </Select>
           </div>
           <div>
-            <Label htmlFor="qty">Stück</Label>
-            <Input id="qty" name="qty" inputMode="decimal" required />
+            <Label htmlFor="qty">Anzahl</Label>
+            <NumberInput id="qty" name="qty" unit="Stück" required />
             <FieldError message={state.fieldErrors?.qty} />
           </div>
           <div>
-            <Label htmlFor="price">Preis</Label>
-            <Input id="price" name="price" inputMode="decimal" required />
+            <Label htmlFor="price">Kurs je Stück</Label>
+            <NumberInput id="price" name="price" unit={ccy} required />
             <FieldError message={state.fieldErrors?.price} />
           </div>
         </div>
@@ -92,7 +103,7 @@ export function TradeForm({ accounts }: { accounts: Account[] }) {
           <div className="grid grid-cols-3 gap-3">
             <div>
               <Label htmlFor="strike">Strike</Label>
-              <Input id="strike" name="strike" inputMode="decimal" required />
+              <NumberInput id="strike" name="strike" unit={ccy} required />
               <FieldError message={state.fieldErrors?.strike} />
             </div>
             <div>
@@ -102,15 +113,20 @@ export function TradeForm({ accounts }: { accounts: Account[] }) {
             </div>
             <div>
               <Label htmlFor="contracts">Kontrakte</Label>
-              <Input id="contracts" name="contracts" inputMode="numeric" defaultValue="1" required />
+              <NumberInput id="contracts" name="contracts" integer unit="Kontr." defaultValue="1" required />
               <FieldError message={state.fieldErrors?.contracts} />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label htmlFor="premium">Prämie (pro Aktie)</Label>
-              <Input id="premium" name="premium" inputMode="decimal" required />
+              <Label htmlFor="premium">Prämie je Aktie</Label>
+              <NumberInput id="premium" name="premium" unit={ccy} required />
               <FieldError message={state.fieldErrors?.premium} />
+            </div>
+            <div className="flex items-end">
+              <p className="text-xs text-zinc-500">
+                Gesamtprämie = Prämie × Kontrakte × 100 (Multiplier).
+              </p>
             </div>
           </div>
         </div>
@@ -124,7 +140,7 @@ export function TradeForm({ accounts }: { accounts: Account[] }) {
         </div>
         <div>
           <Label htmlFor="fees">Gebühren</Label>
-          <Input id="fees" name="fees" inputMode="decimal" defaultValue="0" />
+          <NumberInput id="fees" name="fees" unit={ccy} defaultValue="0" />
         </div>
       </div>
       <div>

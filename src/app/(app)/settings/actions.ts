@@ -4,7 +4,7 @@ import QRCode from "qrcode";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requireUser, requireRole } from "@/lib/auth";
-import { setTwelveDataKey } from "@/lib/settings";
+import { setTwelveDataKey, setOpenFigiKey } from "@/lib/settings";
 import { verifyPassword, hashPassword } from "@/lib/password";
 import { encryptSecret, decryptSecret } from "@/lib/crypto";
 import {
@@ -74,6 +74,32 @@ export async function saveTwelveDataKey(
   await setTwelveDataKey(key);
   revalidatePath("/settings");
   return { notice: key.trim() ? "API-Key gespeichert." : "API-Key entfernt." };
+}
+
+/** Twelve-Data-API-Key explizit entfernen (nur Admin). */
+export async function removeTwelveDataKey(): Promise<void> {
+  await requireRole("ADMIN");
+  await setTwelveDataKey("");
+  revalidatePath("/settings");
+}
+
+/** OpenFIGI-API-Key speichern/entfernen (nur Admin, optional für WKN-Limit). */
+export async function saveOpenFigiKey(
+  _prev: SettingsState,
+  formData: FormData,
+): Promise<SettingsState> {
+  await requireRole("ADMIN");
+  const key = String(formData.get("apiKey") ?? "");
+  await setOpenFigiKey(key);
+  revalidatePath("/settings");
+  return { notice: key.trim() ? "API-Key gespeichert." : "API-Key entfernt." };
+}
+
+/** OpenFIGI-API-Key explizit entfernen (nur Admin). */
+export async function removeOpenFigiKey(): Promise<void> {
+  await requireRole("ADMIN");
+  await setOpenFigiKey("");
+  revalidatePath("/settings");
 }
 
 /** 2FA deaktivieren — verlangt das aktuelle Passwort. */
