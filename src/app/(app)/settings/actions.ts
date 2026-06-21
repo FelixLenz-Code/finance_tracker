@@ -1,8 +1,10 @@
 "use server";
 
 import QRCode from "qrcode";
+import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
-import { requireUser } from "@/lib/auth";
+import { requireUser, requireRole } from "@/lib/auth";
+import { setTwelveDataKey } from "@/lib/settings";
 import { verifyPassword, hashPassword } from "@/lib/password";
 import { encryptSecret, decryptSecret } from "@/lib/crypto";
 import {
@@ -60,6 +62,18 @@ export async function confirmTotpEnroll(
   ]);
 
   return { codes, notice: "2FA ist aktiviert. Bewahre die Backup-Codes sicher auf." };
+}
+
+/** Twelve-Data-API-Key speichern/entfernen (nur Admin). */
+export async function saveTwelveDataKey(
+  _prev: SettingsState,
+  formData: FormData,
+): Promise<SettingsState> {
+  await requireRole("ADMIN");
+  const key = String(formData.get("apiKey") ?? "");
+  await setTwelveDataKey(key);
+  revalidatePath("/settings");
+  return { notice: key.trim() ? "API-Key gespeichert." : "API-Key entfernt." };
 }
 
 /** 2FA deaktivieren — verlangt das aktuelle Passwort. */

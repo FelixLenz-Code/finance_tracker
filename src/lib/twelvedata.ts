@@ -1,5 +1,6 @@
 import "server-only";
 import type { InstrumentType } from "@prisma/client";
+import { getTwelveDataKey } from "@/lib/settings";
 
 const BASE = "https://api.twelvedata.com";
 
@@ -32,8 +33,8 @@ function mapType(raw?: string): InstrumentType {
   return "OTHER";
 }
 
-export function twelveDataConfigured(): boolean {
-  return Boolean(process.env.TWELVEDATA_API_KEY);
+export async function twelveDataConfigured(): Promise<boolean> {
+  return (await getTwelveDataKey()) !== null;
 }
 
 /**
@@ -41,7 +42,7 @@ export function twelveDataConfigured(): boolean {
  * KEINE Preisabfrage — Preise werden manuell erfasst.
  */
 export async function searchSymbols(query: string): Promise<SymbolHit[]> {
-  const apikey = process.env.TWELVEDATA_API_KEY;
+  const apikey = await getTwelveDataKey();
   if (!apikey || query.trim().length < 1) return [];
 
   const url = `${BASE}/symbol_search?symbol=${encodeURIComponent(query)}&outputsize=20&apikey=${apikey}`;

@@ -14,6 +14,10 @@ Ketten) und einer **filterbaren Übersicht**.
 
 > Hinweis: **Preise werden nicht** über die API geladen — du trägst deinen Ausführungspreis
 > manuell ein. Twelve Data wird nur für die **Ticker-Suche** (`symbol_search`) genutzt.
+>
+> Den Twelve-Data-Key kannst du entweder über `TWELVEDATA_API_KEY` in `.env` setzen **oder**
+> bequem als Admin unter **Einstellungen → Marktdaten** eintragen (verschlüsselt in der DB;
+> hat Vorrang vor `.env`).
 
 ## Voraussetzungen
 

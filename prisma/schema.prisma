@@ -220,6 +220,12 @@ model Transaction {
   @@index([tradeDate])
 }
 
+model AppSetting {
+  key       String   @id // z.B. "TWELVEDATA_API_KEY"
+  value     String // verschlüsselt (AES-GCM) bei Secrets
+  updatedAt DateTime @updatedAt
+}
+
 model FxRate {
   id    String   @id @default(cuid())
   base  String
