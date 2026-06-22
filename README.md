@@ -67,15 +67,42 @@ npm run dev                   # http://localhost:3000  (PORT=3100 falls 3000 bel
 Der **erste registrierte Nutzer wird automatisch Admin** und ist ohne E-Mail-Server
 sofort aktiv (ohne SMTP gelten Nutzer als verifiziert; Mail-Links landen im Server-Log).
 
-## Deployment (Docker)
+## Installation (Linux, fertiges Image)
+
+Der schnellste Weg auf einem Server. Holt das via **GitHub Actions** gebaute Image aus der
+GitHub Container Registry und richtet alles (DB, App, `.env` mit zufälligem `AUTH_SECRET`) ein:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/FelixLenz-Code/finance_tracker/main/install.sh | bash
+```
+
+- Re-Ausführen **erkennt** die bestehende Installation und **aktualisiert** sie.
+- Richtet ein **automatisches tägliches Update** ein (systemd-Timer als root, sonst Cron):
+  holt das neueste Image, wendet Migrationen an, startet neu.
+- Verzeichnis: `/opt/finance-tracker` (als root) bzw. `~/.finance-tracker`.
+
+```bash
+./install.sh update      # manuell aktualisieren
+./install.sh status      # Container-Status
+./install.sh logs        # Logs folgen
+./install.sh uninstall   # Container/Timer entfernen (Daten bleiben)
+```
+
+Optionen via Umgebungsvariablen: `APP_PORT` (Default 3000), `INSTALL_DIR`, `IMAGE`,
+`NO_AUTO_UPDATE=1`. Für ein **privates** GHCR-Image zusätzlich `GHCR_USER` + `GHCR_TOKEN`
+(Personal Access Token mit `read:packages`) — oder das Package einmalig auf **public** stellen
+(GitHub → Repo → Packages → Package settings → Change visibility).
+
+> Das `AUTH_SECRET` in der erzeugten `.env` sicher aufbewahren — ohne dasselbe Secret ist ein
+> Backup nicht wiederherstellbar. Die App ist für den Betrieb im internen Netz gedacht
+> (Zugriff von außen via VPN). Ist Port 3000 belegt, `APP_PORT=3100 curl … | bash`.
+
+## Deployment aus dem Quellcode (Docker)
 
 ```bash
 cp .env.example .env          # AUTH_SECRET + ggf. APP_PORT, SMTP_*, Marktdaten-Keys
 docker compose up -d --build  # startet db + app, wendet Migrationen automatisch an
 ```
-
-Die App ist für den Betrieb im internen Netz gedacht (Zugriff von außen via VPN).
-Ist Port 3000 belegt, in `.env` `APP_PORT=3100` setzen.
 
 ## Depots exportieren / importieren
 
