@@ -88,6 +88,10 @@ curl -fsSL https://raw.githubusercontent.com/FelixLenz-Code/finance_tracker/main
 ./install.sh uninstall   # Container/Timer entfernen (Daten bleiben)
 ```
 
+**Versionen:** `:latest` (jeder Push auf main) oder ein fixes Release, z. B.
+`IMAGE=ghcr.io/felixlenz-code/finance_tracker:1.0.0 curl … | bash`. Releases entstehen über
+Git-Tags `vX.Y.Z` (CI baut dann `:X.Y.Z`).
+
 Optionen via Umgebungsvariablen: `APP_PORT` (Default 3000), `INSTALL_DIR`, `IMAGE`,
 `NO_AUTO_UPDATE=1`. Für ein **privates** GHCR-Image zusätzlich `GHCR_USER` + `GHCR_TOKEN`
 (Personal Access Token mit `read:packages`) — oder das Package einmalig auf **public** stellen
