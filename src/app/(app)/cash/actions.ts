@@ -10,10 +10,11 @@ export type CashState = { error?: string; fieldErrors?: Record<string, string>; 
 
 const cashSchema = z.object({
   accountId: z.string().min(1),
-  type: z.enum(["DEPOSIT", "WITHDRAWAL"]),
+  type: z.enum(["DEPOSIT", "WITHDRAWAL", "DIVIDEND"]),
   amount: z.number().positive("Betrag > 0"),
   currency: z.string().trim().length(3, "3-Buchstaben-Code").toUpperCase(),
   date: z.string().min(1, "Datum erforderlich"),
+  symbol: z.string().trim().max(20).optional().or(z.literal("")),
   note: z.string().trim().max(120).optional().or(z.literal("")),
 });
 
@@ -49,11 +50,42 @@ export async function addCashTransaction(
       amount: parsed.data.amount,
       currency: parsed.data.currency,
       date: new Date(parsed.data.date),
+      symbol: parsed.data.type === "DIVIDEND" ? parsed.data.symbol?.toUpperCase() || null : null,
       note: parsed.data.note || null,
     },
   });
   revalidatePath("/cash");
   revalidatePath("/");
+  return { ok: true };
+}
+
+export async function updateCashTransaction(
+  _prev: CashState,
+  formData: FormData,
+): Promise<CashState> {
+  const user = await requireUser();
+  const id = String(formData.get("id") ?? "");
+  const raw = { ...formObject(formData), amount: num(formData.get("amount")) };
+  const parsed = cashSchema.safeParse(raw);
+  if (!parsed.success) return { fieldErrors: zerr(parsed.error) };
+
+  // Ownership via verschachtelte where-Klausel; Konto bleibt unverändert.
+  const res = await prisma.cashTransaction.updateMany({
+    where: { id, account: { userId: user.id } },
+    data: {
+      type: parsed.data.type,
+      amount: parsed.data.amount,
+      currency: parsed.data.currency,
+      date: new Date(parsed.data.date),
+      symbol: parsed.data.type === "DIVIDEND" ? parsed.data.symbol?.toUpperCase() || null : null,
+      note: parsed.data.note || null,
+    },
+  });
+  if (res.count === 0) return { error: "Buchung nicht gefunden." };
+
+  revalidatePath("/cash");
+  revalidatePath("/");
+  revalidatePath("/tax");
   return { ok: true };
 }
 

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Card, Select, Label, InfoTip, cn } from "@/components/ui";
-import { num, pnlClass } from "@/lib/format";
+import { money, pnlClass } from "@/lib/format";
 
 export type StatRow = {
   accountId: string;
@@ -47,23 +47,28 @@ function bucketOf(rows: StatRow[]): Bucket {
   return b;
 }
 
-function CcyAmounts({ map }: { map: Record<string, number> }) {
-  const entries = Object.entries(map);
+function CcyAmounts({ map, align = "left" }: { map: Record<string, number>; align?: "left" | "right" }) {
+  const entries = Object.entries(map).filter(([, v]) => v !== 0);
   if (entries.length === 0) return <span className="text-zinc-500">—</span>;
   return (
-    <span className="space-x-2">
+    <span className={cn("flex flex-wrap gap-x-3", align === "right" && "justify-end")}>
       {entries.map(([ccy, v]) => (
         <span key={ccy} className={cn("font-medium", pnlClass(v))}>
-          {num(v)} {ccy}
+          {money(v, ccy)}
         </span>
       ))}
     </span>
   );
 }
 
-function winRate(b: Bucket): string {
-  if (b.completed === 0) return "—";
-  return `${Math.round((b.wins / b.completed) * 100)} %`;
+function winRatePct(b: Bucket): number | null {
+  if (b.completed === 0) return null;
+  return Math.round((b.wins / b.completed) * 100);
+}
+
+function winRateLabel(b: Bucket): string {
+  const p = winRatePct(b);
+  return p === null ? "—" : `${p} %`;
 }
 
 export function StatsView({
@@ -110,8 +115,13 @@ export function StatsView({
     return [...map.entries()].map(([id, v]) => ({ id, ...v }));
   }, [filtered]);
 
+  const winPct = winRatePct(overall);
+  const losses = overall.completed - overall.wins;
+
   const th = "px-3 py-2 text-left font-medium text-zinc-400";
+  const thr = "px-3 py-2 text-right font-medium text-zinc-400";
   const td = "px-3 py-2";
+  const tdr = "px-3 py-2 text-right";
 
   return (
     <div className="space-y-6">
@@ -137,81 +147,88 @@ export function StatsView({
       </div>
 
       {/* Übersichtskarten */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Card>
-          <p className="flex items-center text-sm text-zinc-400">
-            Realisierter P&amp;L<InfoTip text="Summe realisierter Gewinne/Verluste (geschlossene Positionen, inkl. Gebühren), je Währung getrennt." />
+          <p className="flex items-center text-xs text-zinc-400">
+            Realisierter G&amp;V
+            <InfoTip text="Summe realisierter Gewinne/Verluste (geschlossene Positionen, inkl. Gebühren), je Währung getrennt." />
           </p>
-          <p className="mt-1 text-lg"><CcyAmounts map={overall.realizedByCcy} /></p>
+          <div className="mt-1 text-base"><CcyAmounts map={overall.realizedByCcy} /></div>
         </Card>
         <Card>
-          <p className="text-sm text-zinc-400">Offene Positionen</p>
+          <p className="flex items-center text-xs text-zinc-400">
+            Trefferquote
+            <InfoTip text="Anteil abgeschlossener Positionen mit positivem realisiertem G&V." />
+          </p>
+          <p className="mt-1 text-2xl font-bold">{winRateLabel(overall)}</p>
+          {winPct !== null && (
+            <>
+              <div className="mt-2 flex h-1.5 overflow-hidden rounded-full bg-zinc-800">
+                <div className="bg-emerald-500" style={{ width: `${winPct}%` }} />
+                <div className="bg-red-500/70" style={{ width: `${100 - winPct}%` }} />
+              </div>
+              <p className="mt-1 text-xs text-zinc-500">{overall.wins} Gewinne · {losses} Verluste</p>
+            </>
+          )}
+        </Card>
+        <Card>
+          <p className="text-xs text-zinc-400">Offene Positionen</p>
           <p className="mt-1 text-2xl font-bold">{overall.open}</p>
         </Card>
         <Card>
-          <p className="flex items-center text-sm text-zinc-400">
-            Abgeschlossen<InfoTip text="Anzahl nicht mehr offener Positionen (geschlossen, verfallen, angedient, gerollt)." />
+          <p className="flex items-center text-xs text-zinc-400">
+            Abgeschlossen
+            <InfoTip text="Anzahl nicht mehr offener Positionen (geschlossen, verfallen, angedient, gerollt)." />
           </p>
           <p className="mt-1 text-2xl font-bold">{overall.completed}</p>
-        </Card>
-        <Card>
-          <p className="flex items-center text-sm text-zinc-400">
-            Trefferquote<InfoTip text="Anteil abgeschlossener Positionen mit positivem realisiertem P&L." />
-          </p>
-          <p className="mt-1 text-2xl font-bold">{winRate(overall)}</p>
-        </Card>
-        <Card>
-          <p className="flex items-center text-sm text-zinc-400">
-            Gerollt<InfoTip text="Anzahl Positionen, die in eine neue gerollt wurden (Status ROLLED)." />
-          </p>
-          <p className="mt-1 text-2xl font-bold">{overall.rolled}</p>
+          <p className="text-xs text-zinc-500">davon {overall.rolled} gerollt</p>
         </Card>
       </div>
 
       {/* Pro Depot (nur bei "Alle Depots") */}
-      {account === "ALL" && perAccount.length > 0 && (
-        <div>
-          <h2 className="mb-2 text-lg font-medium">Pro Depot</h2>
-          <div className="overflow-x-auto rounded-lg border border-zinc-800">
+      {account === "ALL" && perAccount.length > 1 && (
+        <Card>
+          <h2 className="mb-2 text-sm font-medium text-zinc-300">Pro Depot</h2>
+          <div className="overflow-x-auto rounded-lg border border-white/5">
             <table className="w-full text-sm">
-              <thead className="border-b border-zinc-800 bg-zinc-900/60">
+              <thead className="bg-zinc-900/60 text-xs text-zinc-400">
                 <tr>
                   <th className={th}>Depot</th>
-                  <th className={th}>Realisierter P&amp;L</th>
-                  <th className={th}>Offen</th>
-                  <th className={th}>Abgeschlossen</th>
-                  <th className={th}>Trefferquote</th>
+                  <th className={thr}>Realisierter G&amp;V</th>
+                  <th className={thr}>Offen</th>
+                  <th className={thr}>Abgeschl.</th>
+                  <th className={thr}>Trefferquote</th>
                 </tr>
               </thead>
               <tbody>
                 {perAccount.map((a) => (
-                  <tr key={a.id} className="border-b border-zinc-800/60">
-                    <td className={td}>{a.name}</td>
-                    <td className={td}><CcyAmounts map={a.b.realizedByCcy} /></td>
-                    <td className={td}>{a.b.open}</td>
-                    <td className={td}>{a.b.completed}</td>
-                    <td className={td}>{winRate(a.b)}</td>
+                  <tr key={a.id} className="border-t border-white/5">
+                    <td className={cn(td, "font-medium")}>{a.name}</td>
+                    <td className={tdr}><CcyAmounts map={a.b.realizedByCcy} align="right" /></td>
+                    <td className={tdr}>{a.b.open}</td>
+                    <td className={tdr}>{a.b.completed}</td>
+                    <td className={tdr}>{winRateLabel(a.b)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Pro Instrument */}
-      <div>
-        <h2 className="mb-2 text-lg font-medium">Pro Instrument</h2>
-        <div className="overflow-x-auto rounded-lg border border-zinc-800">
+      <Card>
+        <h2 className="mb-2 text-sm font-medium text-zinc-300">Pro Instrument</h2>
+        <div className="overflow-x-auto rounded-lg border border-white/5">
           <table className="w-full text-sm">
-            <thead className="border-b border-zinc-800 bg-zinc-900/60">
+            <thead className="bg-zinc-900/60 text-xs text-zinc-400">
               <tr>
                 <th className={th}>Symbol</th>
                 <th className={th}>Name</th>
-                <th className={th}>Realisierter P&amp;L</th>
-                <th className={th}>Positionen</th>
-                <th className={th}>Offen</th>
-                <th className={th}>Trefferquote</th>
+                <th className={thr}>Realisierter G&amp;V</th>
+                <th className={thr}>Positionen</th>
+                <th className={thr}>Offen</th>
+                <th className={thr}>Trefferquote</th>
               </tr>
             </thead>
             <tbody>
@@ -219,19 +236,19 @@ export function StatsView({
                 <tr><td className="px-3 py-6 text-center text-zinc-500" colSpan={6}>Keine Daten.</td></tr>
               )}
               {perInstrument.map((i) => (
-                <tr key={i.symbol} className="border-b border-zinc-800/60">
+                <tr key={i.symbol} className="border-t border-white/5">
                   <td className={cn(td, "font-medium")}>{i.symbol}</td>
                   <td className={cn(td, "text-zinc-400")}>{i.name}</td>
-                  <td className={td}><CcyAmounts map={i.b.realizedByCcy} /></td>
-                  <td className={td}>{i.b.count}</td>
-                  <td className={td}>{i.b.open}</td>
-                  <td className={td}>{winRate(i.b)}</td>
+                  <td className={tdr}><CcyAmounts map={i.b.realizedByCcy} align="right" /></td>
+                  <td className={tdr}>{i.b.count}</td>
+                  <td className={tdr}>{i.b.open}</td>
+                  <td className={tdr}>{winRateLabel(i.b)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

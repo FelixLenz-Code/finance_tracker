@@ -2,6 +2,7 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { AccountForm } from "./AccountForm";
 import { AccountRow } from "./AccountRow";
+import { ImportAccount } from "./ImportAccount";
 import { Card } from "@/components/ui";
 
 export default async function AccountsPage() {
@@ -14,7 +15,10 @@ export default async function AccountsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Konten</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">Depots</h1>
+        <ImportAccount />
+      </div>
 
       <Card>
         <h2 className="mb-3 text-lg font-medium">Neues Depot</h2>
@@ -23,7 +27,7 @@ export default async function AccountsPage() {
 
       <div className="space-y-3">
         {accounts.length === 0 && (
-          <p className="text-zinc-400">Noch keine Konten angelegt.</p>
+          <p className="text-zinc-400">Noch keine Depots angelegt.</p>
         )}
         {accounts.map((a) => (
           <AccountRow

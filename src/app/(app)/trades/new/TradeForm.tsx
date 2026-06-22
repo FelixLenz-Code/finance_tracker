@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { Button, Input, NumberInput, Label, Select, FieldError, FormError, InfoTip, cn } from "@/components/ui";
 import { TickerPicker } from "@/components/TickerPicker";
 import { createTrade, type TradeState } from "../actions";
@@ -9,8 +9,12 @@ type Account = { id: string; name: string; baseCurrency: string };
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-export function TradeForm({ accounts }: { accounts: Account[] }) {
+export function TradeForm({ accounts, onSuccess }: { accounts: Account[]; onSuccess?: () => void }) {
   const [state, action, pending] = useActionState(createTrade, {} as TradeState);
+
+  useEffect(() => {
+    if (state.ok) onSuccess?.();
+  }, [state.ok, onSuccess]);
   const [kind, setKind] = useState<"STOCK" | "OPTION">("STOCK");
   const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
   const [instrCcy, setInstrCcy] = useState<string | null>(null);

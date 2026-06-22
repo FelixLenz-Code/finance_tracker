@@ -27,6 +27,11 @@ model User {
   emailVerified DateTime?
   totpEnabled  Boolean   @default(false)
   totpSecret   String? // verschlüsselt/Base32, nur gesetzt wenn 2FA eingerichtet
+  // Persönliche Optionsablauf-Erinnerungen
+  remindersEnabled Boolean @default(true)
+  reminderDays     Int     @default(7)
+  reminderHour     Int     @default(9)
+  reminderLastSent String? // YYYY-MM-DD des letzten Versands (Dedup im Scheduler)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
@@ -107,6 +112,7 @@ model Account {
 enum CashTxnType {
   DEPOSIT
   WITHDRAWAL
+  DIVIDEND
 }
 
 model CashTransaction {
@@ -117,6 +123,7 @@ model CashTransaction {
   amount    Decimal     @db.Decimal(18, 2)
   currency  String
   date      DateTime
+  symbol    String? // bei Dividenden: Aktie/Wertpapier, von dem die Dividende stammt
   note      String?
   createdAt DateTime    @default(now())
 

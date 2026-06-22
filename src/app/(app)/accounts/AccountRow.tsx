@@ -74,6 +74,14 @@ export function AccountRow({ account }: { account: Account }) {
         </p>
       </div>
       <div className="flex items-center gap-3">
+        <a
+          href={`/accounts/${account.id}/export`}
+          download
+          className="text-sm text-zinc-400 transition-colors hover:text-emerald-400"
+          title="Depot als JSON exportieren"
+        >
+          Export
+        </a>
         <button
           type="button"
           onClick={() => setEditing(true)}

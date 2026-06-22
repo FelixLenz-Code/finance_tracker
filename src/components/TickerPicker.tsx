@@ -25,16 +25,32 @@ type ApiHit = {
 export function TickerPicker({
   defaultCurrency = "USD",
   onCurrency,
+  symbolOnly = false,
+  fieldName = "symbol",
+  label,
+  initialSymbol,
 }: {
   defaultCurrency?: string;
   onCurrency?: (currency: string | null) => void;
+  /** Nur das Symbol erfassen (keine Börse/Währung/Name-Felder) — z. B. für Dividenden. */
+  symbolOnly?: boolean;
+  /** Name des verborgenen Symbol-Felds (Standard: "symbol"). */
+  fieldName?: string;
+  /** Beschriftung des Felds. */
+  label?: string;
+  /** Vorbelegtes Symbol (z. B. beim Bearbeiten). */
+  initialSymbol?: string;
 }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ApiHit[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [configured, setConfigured] = useState(true);
-  const [picked, setPicked] = useState<Picked | null>(null);
+  const [picked, setPicked] = useState<Picked | null>(
+    initialSymbol
+      ? { symbol: initialSymbol, exchange: "", name: "", currency: defaultCurrency, type: "STOCK", mic: null }
+      : null,
+  );
   const [manual, setManual] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
 
@@ -86,18 +102,22 @@ export function TickerPicker({
   if (picked) {
     return (
       <div key="picked" className="space-y-1">
-        <Label>Instrument</Label>
+        <Label>{label ?? "Instrument"}</Label>
         <div className="flex items-center justify-between rounded-md border border-emerald-700/60 bg-emerald-950/30 px-3 py-2">
           <div>
             <span className="font-medium">{picked.symbol}</span>
-            <span className="ml-2 text-sm text-zinc-400">{picked.name}</span>
+            {!symbolOnly && <span className="ml-2 text-sm text-zinc-400">{picked.name}</span>}
           </div>
           <div className="flex items-center gap-2">
-            <Badge color={instrumentTypeLabel(picked.type).color}>
-              {instrumentTypeLabel(picked.type).label}
-            </Badge>
-            <Badge color="zinc">{picked.exchange}</Badge>
-            <Badge color="zinc">{picked.currency}</Badge>
+            {!symbolOnly && (
+              <>
+                <Badge color={instrumentTypeLabel(picked.type).color}>
+                  {instrumentTypeLabel(picked.type).label}
+                </Badge>
+                <Badge color="zinc">{picked.exchange}</Badge>
+                <Badge color="zinc">{picked.currency}</Badge>
+              </>
+            )}
             <button
               type="button"
               onClick={clearPick}
@@ -107,12 +127,32 @@ export function TickerPicker({
             </button>
           </div>
         </div>
-        <input type="hidden" name="symbol" value={picked.symbol} />
-        <input type="hidden" name="exchange" value={picked.exchange} />
-        <input type="hidden" name="name" value={picked.name} />
-        <input type="hidden" name="currency" value={picked.currency} />
-        <input type="hidden" name="instrType" value={picked.type} />
-        <input type="hidden" name="mic" value={picked.mic ?? ""} />
+        <input type="hidden" name={fieldName} value={picked.symbol} />
+        {!symbolOnly && (
+          <>
+            <input type="hidden" name="exchange" value={picked.exchange} />
+            <input type="hidden" name="name" value={picked.name} />
+            <input type="hidden" name="currency" value={picked.currency} />
+            <input type="hidden" name="instrType" value={picked.type} />
+            <input type="hidden" name="mic" value={picked.mic ?? ""} />
+          </>
+        )}
+      </div>
+    );
+  }
+
+  if (manual && symbolOnly) {
+    return (
+      <div key="manual" className="space-y-1">
+        <Label>{label ?? "Symbol"} (manuell)</Label>
+        <Input name={fieldName} placeholder="Symbol z.B. ALV" autoComplete="off" required />
+        <button
+          type="button"
+          onClick={() => setManual(false)}
+          className="text-sm text-zinc-400 hover:text-zinc-200"
+        >
+          ← zur Suche
+        </button>
       </div>
     );
   }
@@ -150,7 +190,7 @@ export function TickerPicker({
 
   return (
     <div key="search" className="space-y-1" ref={boxRef}>
-      <Label htmlFor="ticker-search">Instrument (Ticker, Name oder ISIN)</Label>
+      <Label htmlFor="ticker-search">{label ?? "Instrument (Ticker, Name oder ISIN)"}</Label>
       <div className="relative">
         <Input
           id="ticker-search"

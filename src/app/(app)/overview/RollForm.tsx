@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
 import { Button, Input, NumberInput, Label, FieldError, FormError } from "@/components/ui";
 import { rollOptionAction, type TradeState } from "../trades/actions";
 
@@ -10,12 +10,19 @@ export function RollForm({
   positionId,
   currency,
   currentStrike,
+  onDone,
 }: {
   positionId: string;
   currency: string;
   currentStrike: number | null;
+  onDone?: () => void;
 }) {
   const [state, action, pending] = useActionState(rollOptionAction, {} as TradeState);
+
+  useEffect(() => {
+    if (state.ok) onDone?.();
+  }, [state.ok, onDone]);
+
   return (
     <form action={action} className="space-y-3">
       <input type="hidden" name="positionId" value={positionId} />

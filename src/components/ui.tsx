@@ -151,7 +151,7 @@ export function InfoTip({
   width?: string;
 }) {
   return (
-    <span className={cn("group relative ml-1 inline-flex items-center align-middle", className)}>
+    <span className={cn("group relative ml-1 inline-flex items-center align-middle print:hidden", className)}>
       <span className="flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-zinc-600 text-[10px] font-medium leading-none text-zinc-400">
         i
       </span>

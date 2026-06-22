@@ -28,6 +28,19 @@ export function fmtDate(d: Date | string | null | undefined): string {
   return new Intl.DateTimeFormat("de-DE", { dateStyle: "medium" }).format(new Date(d));
 }
 
+/** Deutsche Labels für den Positions-Status (sonst zeigt die UI rohe Enums). */
+export const POSITION_STATUS_LABEL: Record<string, string> = {
+  OPEN: "Offen",
+  CLOSED: "Geschlossen",
+  ROLLED: "Gerollt",
+  EXPIRED: "Verfallen",
+  ASSIGNED: "Angedient",
+};
+
+export function statusLabel(s: string): string {
+  return POSITION_STATUS_LABEL[s] ?? s;
+}
+
 /** Vorzeichen-Klasse für P&L (grün/rot/neutral). */
 export function pnlClass(v: Num): string {
   const n = toNum(v);

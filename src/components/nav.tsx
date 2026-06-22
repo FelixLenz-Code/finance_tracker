@@ -4,15 +4,15 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/components/ui";
 
-type IconName = "dashboard" | "overview" | "stats" | "cash" | "add" | "accounts" | "settings";
+type IconName = "dashboard" | "overview" | "stats" | "tax" | "cash" | "add" | "accounts" | "settings";
 
 const links: { href: string; label: string; icon: IconName; dividerBefore?: boolean }[] = [
   { href: "/", label: "Dashboard", icon: "dashboard" },
-  { href: "/stats", label: "Statistik", icon: "stats" },
-  { href: "/trades/new", label: "Trade erfassen", icon: "add", dividerBefore: true },
   { href: "/overview", label: "Trades", icon: "overview" },
-  { href: "/accounts", label: "Konten", icon: "accounts", dividerBefore: true },
-  { href: "/cash", label: "Kontostand", icon: "cash" },
+  { href: "/stats", label: "Statistik", icon: "stats", dividerBefore: true },
+  { href: "/tax", label: "Steuer", icon: "tax" },
+  { href: "/cash", label: "Kontostand", icon: "cash", dividerBefore: true },
+  { href: "/accounts", label: "Depots", icon: "accounts" },
 ];
 
 function Icon({ name }: { name: IconName }) {
@@ -52,6 +52,13 @@ function Icon({ name }: { name: IconName }) {
         <path d="M8 16v-4" />
         <path d="M13 16V8" />
         <path d="M18 16v-7" />
+      </>
+    ),
+    tax: (
+      <>
+        <line x1="19" y1="5" x2="5" y2="19" />
+        <circle cx="6.5" cy="6.5" r="2.5" />
+        <circle cx="17.5" cy="17.5" r="2.5" />
       </>
     ),
     cash: (

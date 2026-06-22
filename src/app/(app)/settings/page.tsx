@@ -1,13 +1,29 @@
 import { requireUser } from "@/lib/auth";
-import { twelveDataKeySource, openFigiKeySource } from "@/lib/settings";
+import { twelveDataKeySource, openFigiKeySource, backupStatus, smtpStatus, reminderStatus } from "@/lib/settings";
+import { mailConfigured } from "@/lib/mail";
 import { Card, Badge } from "@/components/ui";
 import { TwoFactor } from "./TwoFactor";
 import { ApiKeyField } from "./ApiKeyField";
+import { BackupSettings } from "./BackupSettings";
+import { SmtpSettings } from "./SmtpSettings";
+import { ReminderSettings } from "./ReminderSettings";
+import { MyReminderSettings } from "./MyReminderSettings";
 import {
   saveTwelveDataKey,
   removeTwelveDataKey,
   saveOpenFigiKey,
   removeOpenFigiKey,
+  saveBackupConfig,
+  removeBackupConfig,
+  runBackupNow,
+  regenerateBackupToken,
+  downloadRcloneConf,
+  saveSmtpConfig,
+  removeSmtpConfig,
+  sendTestMail,
+  saveReminderPrefs,
+  regenerateReminderToken,
+  runRemindersNow,
 } from "./actions";
 
 export default async function SettingsPage() {
@@ -15,6 +31,10 @@ export default async function SettingsPage() {
   const isAdmin = user.role === "ADMIN";
   const tdSource = isAdmin ? await twelveDataKeySource() : null;
   const ofSource = isAdmin ? await openFigiKeySource() : null;
+  const backup = isAdmin ? await backupStatus() : null;
+  const smtp = isAdmin ? await smtpStatus() : null;
+  const reminder = isAdmin ? await reminderStatus() : null;
+  const mailOk = await mailConfigured();
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Einstellungen</h1>
@@ -42,6 +62,18 @@ export default async function SettingsPage() {
       <Card>
         <h2 className="mb-3 text-lg font-medium">Zwei-Faktor-Authentifizierung</h2>
         <TwoFactor enabled={user.totpEnabled} />
+      </Card>
+
+      <Card>
+        <h2 className="mb-1 text-lg font-medium">Erinnerungen</h2>
+        <p className="mb-3 text-sm text-zinc-500">
+          E-Mail-Erinnerung für deine offenen Optionen, die bald verfallen.
+        </p>
+        <MyReminderSettings
+          initial={{ enabled: user.remindersEnabled, days: user.reminderDays, hour: user.reminderHour }}
+          mailConfigured={mailOk}
+          saveAction={saveReminderPrefs}
+        />
       </Card>
 
       {isAdmin && (
@@ -75,6 +107,54 @@ export default async function SettingsPage() {
             inputLabel="OpenFIGI-API-Key"
             helpUrl="https://www.openfigi.com/api"
             helpText="Optional, erhöht das Rate-Limit der WKN-Auflösung."
+          />
+        </Card>
+      )}
+
+      {isAdmin && smtp && (
+        <Card>
+          <h2 className="mb-1 text-lg font-medium">E-Mail-Server — SMTP</h2>
+          <p className="mb-3 text-sm text-zinc-500">
+            Für E-Mail-Verifizierung, Passwort-Reset und Erinnerungen.
+          </p>
+          <SmtpSettings
+            status={smtp}
+            saveAction={saveSmtpConfig}
+            removeAction={removeSmtpConfig}
+            testAction={sendTestMail}
+          />
+        </Card>
+      )}
+
+      {isAdmin && reminder && smtp && (
+        <Card>
+          <h2 className="mb-1 text-lg font-medium">Optionsablauf-Erinnerungen (Admin)</h2>
+          <p className="mb-3 text-sm text-zinc-500">
+            Sammel-Versand & externe Auslösung. Frist/Uhrzeit stellt jede:r Nutzer:in selbst ein.
+          </p>
+          <ReminderSettings
+            hasToken={reminder.hasToken}
+            smtpConfigured={smtp.configured}
+            tokenAction={regenerateReminderToken}
+            runAction={runRemindersNow}
+          />
+        </Card>
+      )}
+
+      {isAdmin && backup && (
+        <Card>
+          <h2 className="mb-1 text-lg font-medium">Offsite-Backup — rclone</h2>
+          <p className="mb-3 text-sm text-zinc-500">
+            Verschlüsseltes Backup der Datenbank an einen rclone-Speicher (S3, Backblaze,
+            WebDAV, …).
+          </p>
+          <BackupSettings
+            status={backup}
+            saveAction={saveBackupConfig}
+            removeAction={removeBackupConfig}
+            runAction={runBackupNow}
+            tokenAction={regenerateBackupToken}
+            downloadAction={downloadRcloneConf}
           />
         </Card>
       )}

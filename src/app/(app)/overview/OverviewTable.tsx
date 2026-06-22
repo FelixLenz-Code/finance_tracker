@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Badge, Button, Input, NumberInput, Label, Select, cn } from "@/components/ui";
-import { money, num, fmtDate, pnlClass } from "@/lib/format";
+import { money, num, fmtDate, pnlClass, statusLabel } from "@/lib/format";
 import {
   closePositionAction,
   expireOptionAction,
@@ -11,6 +11,7 @@ import {
   undoRollAction,
   reopenOptionAction,
 } from "../trades/actions";
+import { Modal } from "@/components/Modal";
 import { RollForm } from "./RollForm";
 import { EditForm } from "./EditForm";
 import { DeleteEntryButton } from "./DeleteEntryButton";
@@ -37,9 +38,7 @@ export function OverviewTable({
   accounts: Account[];
   initialAccount?: string;
 }) {
-  const [accFilter, setAccFilter] = useState<Set<string>>(
-    new Set(initialAccount ? [initialAccount] : []),
-  );
+  const [accFilter, setAccFilter] = useState<string>(initialAccount ?? "ALL");
   const [kind, setKind] = useState("ALL");
   const [status, setStatus] = useState("ALL");
   const [right, setRight] = useState("ALL");
@@ -52,19 +51,11 @@ export function OverviewTable({
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [action, setAction] = useState<{ id: string; type: string } | null>(null);
   const [notesRow, setNotesRow] = useState<Row | null>(null);
-
-  function toggleAcc(id: string) {
-    setAccFilter((prev) => {
-      const n = new Set(prev);
-      if (n.has(id)) n.delete(id);
-      else n.add(id);
-      return n;
-    });
-  }
+  const [editRow, setEditRow] = useState<Row | null>(null);
 
   const filtered = useMemo(() => {
     const out = rows.filter((r) => {
-      if (accFilter.size > 0 && !accFilter.has(r.accountId)) return false;
+      if (accFilter !== "ALL" && r.accountId !== accFilter) return false;
       if (kind !== "ALL" && r.kind !== kind) return false;
       if (status !== "ALL" && r.status !== status) return false;
       if (right !== "ALL" && r.optionRight !== right) return false;
@@ -84,6 +75,7 @@ export function OverviewTable({
   }, [rows, accFilter, kind, status, right, q, from, to, sortKey, sortDir]);
 
   const totalRealized = filtered.reduce((s, r) => s + r.realizedPnl, 0);
+  const actionRow = action ? rows.find((r) => r.id === action.id) ?? null : null;
 
   function sortBy(key: SortKey) {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -101,30 +93,14 @@ export function OverviewTable({
       {/* Filterleiste */}
       <div className="space-y-3 rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
         {accounts.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm text-zinc-400">Konten:</span>
-            {accounts.map((a) => (
-              <button
-                key={a.id}
-                onClick={() => toggleAcc(a.id)}
-                className={cn(
-                  "rounded-full px-3 py-1 text-xs font-medium",
-                  accFilter.has(a.id)
-                    ? "bg-emerald-600 text-white"
-                    : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700",
-                )}
-              >
-                {a.name}
-              </button>
-            ))}
-            {accFilter.size > 0 && (
-              <button
-                onClick={() => setAccFilter(new Set())}
-                className="text-xs text-zinc-500 hover:text-zinc-300"
-              >
-                alle
-              </button>
-            )}
+          <div className="w-full sm:w-64">
+            <Label>Depot</Label>
+            <Select value={accFilter} onChange={(e) => setAccFilter(e.target.value)}>
+              <option value="ALL">Alle Depots</option>
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </Select>
           </div>
         )}
         <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
@@ -174,7 +150,7 @@ export function OverviewTable({
       <div className="flex items-center justify-between text-sm">
         <span className="text-zinc-400">{filtered.length} Einträge</span>
         <span>
-          Realisierter P&amp;L (gefiltert):{" "}
+          Realisierter G&amp;V (gefiltert):{" "}
           <span className={cn("font-semibold", pnlClass(totalRealized))}>
             {num(totalRealized)}
           </span>
@@ -196,7 +172,7 @@ export function OverviewTable({
               <th className={th}>Ø Preis</th>
               <th className={th}>Status</th>
               <th className={cn(th, "cursor-pointer")} onClick={() => sortBy("realizedPnl")}>
-                Real. P&amp;L {sortKey === "realizedPnl" && (sortDir === "asc" ? "▲" : "▼")}
+                Real. G&amp;V {sortKey === "realizedPnl" && (sortDir === "asc" ? "▲" : "▼")}
               </th>
               <th className={cn(th, "cursor-pointer")} onClick={() => sortBy("openedAt")}>
                 Eröffnet {sortKey === "openedAt" && (sortDir === "asc" ? "▲" : "▼")}
@@ -230,12 +206,9 @@ export function OverviewTable({
                       return n;
                     })
                   }
-                  action={action?.id === r.id ? action.type : null}
-                  setAction={(type) =>
-                    setAction((cur) => (cur?.id === r.id && cur.type === type ? null : { id: r.id, type }))
-                  }
-                  clearAction={() => setAction(null)}
+                  setAction={(type) => setAction({ id: r.id, type })}
                   onShowNotes={() => setNotesRow(r)}
+                  onShowEdit={() => setEditRow(r)}
                 />
               );
             })}
@@ -243,42 +216,52 @@ export function OverviewTable({
         </table>
       </div>
 
+      {actionRow && action && (
+        <Modal title={actionTitle(actionRow, action.type)} onClose={() => setAction(null)}>
+          <ActionPanel r={actionRow} action={action.type} onDone={() => setAction(null)} />
+        </Modal>
+      )}
       {notesRow && <NotesModal row={notesRow} onClose={() => setNotesRow(null)} />}
+      {editRow && <EditModal row={editRow} onClose={() => setEditRow(null)} />}
     </div>
   );
 }
 
-function NotesModal({ row, onClose }: { row: Row; onClose: () => void }) {
+function actionTitle(r: Row, action: string): string {
+  const sfx = r.kind === "OPTION" ? ` · ${r.symbol} ${r.optionRight ?? ""} ${r.strike ?? ""}`.trimEnd() : ` · ${r.symbol}`;
+  const base =
+    action === "roll" ? "Option rollen"
+    : action === "expire" ? "Verfall buchen"
+    : action === "assign" ? "Andienung buchen"
+    : r.kind === "STOCK" ? "Position verkaufen"
+    : "Position schließen";
+  return base + sfx;
+}
+
+function EditModal({ row, onClose }: { row: Row; onClose: () => void }) {
+  const sfx = row.kind === "OPTION" ? ` ${row.optionRight ?? ""} ${row.strike ?? ""}` : "";
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-      onClick={onClose}
-    >
-      <div
-        className="max-h-[80vh] w-full max-w-md overflow-y-auto rounded-xl border border-zinc-700 bg-zinc-900 p-5 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="font-medium">
-            Notizen · {row.symbol}
-            {row.kind === "OPTION" ? ` ${row.optionRight ?? ""} ${row.strike ?? ""}` : ""}
-          </h3>
-          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-100" aria-label="Schließen">
-            ✕
-          </button>
-        </div>
-        <div className="space-y-3">
-          {row.transactions.map((t) => (
-            <NoteEditor
-              key={t.id}
-              txnId={t.id}
-              initial={t.note ?? ""}
-              label={`${txnLabel(t.type)} · ${fmtDate(t.tradeDate)}`}
-            />
-          ))}
-        </div>
+    <Modal title={`Bearbeiten · ${row.symbol}${sfx}`} onClose={onClose}>
+      <EditForm r={row} onSuccess={onClose} />
+    </Modal>
+  );
+}
+
+function NotesModal({ row, onClose }: { row: Row; onClose: () => void }) {
+  const sfx = row.kind === "OPTION" ? ` ${row.optionRight ?? ""} ${row.strike ?? ""}` : "";
+  return (
+    <Modal title={`Notizen · ${row.symbol}${sfx}`} onClose={onClose}>
+      <div className="space-y-3">
+        {row.transactions.map((t) => (
+          <NoteEditor
+            key={t.id}
+            txnId={t.id}
+            initial={t.note ?? ""}
+            label={`${txnLabel(t.type)} · ${fmtDate(t.tradeDate)}`}
+          />
+        ))}
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -334,20 +317,18 @@ function FragmentRow({
   isExp,
   td,
   onToggleExpand,
-  action,
   setAction,
-  clearAction,
   onShowNotes,
+  onShowEdit,
 }: {
   r: Row;
   isOpen: boolean;
   isExp: boolean;
   td: string;
   onToggleExpand: () => void;
-  action: string | null;
   setAction: (t: string) => void;
-  clearAction: () => void;
   onShowNotes: () => void;
+  onShowEdit: () => void;
 }) {
   return (
     <>
@@ -390,49 +371,72 @@ function FragmentRow({
         <td className={td}>{num(r.qty, 4)}</td>
         <td className={td}>{money(r.avgOpenPrice, r.currency)}</td>
         <td className={td}>
-          <Badge color={statusColor(r.status)}>{r.status}</Badge>
+          <Badge color={statusColor(r.status)}>{statusLabel(r.status)}</Badge>
         </td>
         <td className={cn(td, "font-medium", pnlClass(r.realizedPnl))}>
           {num(r.realizedPnl)} {r.currency}
         </td>
         <td className={td}>{fmtDate(r.openedAt)}</td>
         <td className={td}>
-          <div className="flex flex-wrap gap-1">
+          <div className="flex items-center gap-1">
             {isOpen && (
-              <>
-                <ActBtn
-                  label={r.kind === "STOCK" ? "Verkaufen" : "Schließen"}
-                  onClick={() => setAction("close")}
-                />
-                {r.kind === "OPTION" && <ActBtn label="Rollen" onClick={() => setAction("roll")} />}
-                {r.kind === "OPTION" && <ActBtn label="Verfall" onClick={() => setAction("expire")} />}
-                {r.kind === "OPTION" && <ActBtn label="Andienung" onClick={() => setAction("assign")} />}
-              </>
-            )}
-            {r.status === "OPEN" && r.transactions.length === 1 && (
-              <ActBtn label="Bearbeiten" onClick={() => setAction("edit")} />
-            )}
-            {r.isChain && r.status === "OPEN" && (
-              <ActionButton
-                action={undoRollAction}
-                positionId={r.id}
-                label="Roll rückgängig"
-                confirmText="Letzten Roll rückgängig machen? Die neue Position wird gelöscht und die vorherige wieder geöffnet."
+              <ActBtn
+                label={r.kind === "STOCK" ? "Verkaufen" : "Schließen"}
+                onClick={() => setAction("close")}
               />
             )}
-            {r.kind === "OPTION" && ["CLOSED", "EXPIRED", "ASSIGNED"].includes(r.status) && (
-              <ActionButton
-                action={reopenOptionAction}
-                positionId={r.id}
-                label="Wieder öffnen"
-                confirmText="Diese Option wieder öffnen? Die Abschluss-Buchung (Schließen/Verfall/Andienung) wird rückgängig gemacht."
-              />
-            )}
-            <DeleteEntryButton
-              positionId={r.id}
-              label={`${r.symbol}${r.kind === "OPTION" ? ` ${r.optionRight ?? ""} ${r.strike ?? ""}` : ""}`}
-              legs={r.legs.length}
-            />
+            <ActionsMenu>
+              {(close) => {
+                const showRoll = isOpen && r.kind === "OPTION";
+                const showEdit = r.status === "OPEN" && r.transactions.length === 1;
+                const showUndo = r.isChain && r.status === "OPEN";
+                const showReopen =
+                  r.kind === "OPTION" && ["CLOSED", "EXPIRED", "ASSIGNED"].includes(r.status);
+                const hasAbove = showRoll || showEdit || showUndo || showReopen;
+                return (
+                  <>
+                    {showRoll && (
+                      <>
+                        <MenuItem label="Rollen" onClick={() => { setAction("roll"); close(); }} />
+                        <MenuItem label="Verfall buchen" onClick={() => { setAction("expire"); close(); }} />
+                        <MenuItem label="Andienung buchen" onClick={() => { setAction("assign"); close(); }} />
+                      </>
+                    )}
+                    {showEdit && (
+                      <MenuItem label="Bearbeiten" onClick={() => { onShowEdit(); close(); }} />
+                    )}
+                    {showUndo && (
+                      <ActionButton
+                        action={undoRollAction}
+                        positionId={r.id}
+                        label="Roll rückgängig"
+                        confirmText="Letzten Roll rückgängig machen? Die neue Position wird gelöscht und die vorherige wieder geöffnet."
+                        className={MENU_ITEM_CLASS}
+                        onSelect={close}
+                      />
+                    )}
+                    {showReopen && (
+                      <ActionButton
+                        action={reopenOptionAction}
+                        positionId={r.id}
+                        label="Wieder öffnen"
+                        confirmText="Diese Option wieder öffnen? Die Abschluss-Buchung (Schließen/Verfall/Andienung) wird rückgängig gemacht."
+                        className={MENU_ITEM_CLASS}
+                        onSelect={close}
+                      />
+                    )}
+                    {hasAbove && <div className="my-1 h-px bg-white/5" />}
+                    <DeleteEntryButton
+                      positionId={r.id}
+                      label={`${r.symbol}${r.kind === "OPTION" ? ` ${r.optionRight ?? ""} ${r.strike ?? ""}` : ""}`}
+                      legs={r.legs.length}
+                      className={cn(MENU_ITEM_CLASS, "text-red-400 hover:bg-red-950/40")}
+                      onSelect={close}
+                    />
+                  </>
+                );
+              }}
+            </ActionsMenu>
           </div>
         </td>
       </tr>
@@ -449,7 +453,7 @@ function FragmentRow({
             <td className={cn(td, "text-zinc-400")}>{num(leg.qty, 4)}</td>
             <td className={cn(td, "text-zinc-400")}>{money(leg.avgOpenPrice, r.currency)}</td>
             <td className={td}>
-              <Badge color={statusColor(leg.status)}>{leg.status}</Badge>
+              <Badge color={statusColor(leg.status)}>{statusLabel(leg.status)}</Badge>
             </td>
             <td className={cn(td, pnlClass(leg.realizedPnl))}>{num(leg.realizedPnl)}</td>
             <td className={cn(td, "text-zinc-400")}>{fmtDate(leg.openedAt)}</td>
@@ -477,16 +481,6 @@ function FragmentRow({
                 ))}
               </div>
             </div>
-          </td>
-        </tr>
-      )}
-
-      {/* Aktionspanel */}
-      {action && (
-        <tr className="border-b border-zinc-800 bg-zinc-950/60">
-          <td className={td}></td>
-          <td className={td} colSpan={9}>
-            <ActionPanel r={r} action={action} onDone={clearAction} />
           </td>
         </tr>
       )}
@@ -521,12 +515,84 @@ function ActBtn({ label, onClick }: { label: string; onClick: () => void }) {
   );
 }
 
-function ActionPanel({ r, action, onDone }: { r: Row; action: string; onDone: () => void }) {
-  if (action === "edit") {
-    return <EditForm r={r} />;
+const MENU_ITEM_CLASS =
+  "block w-full px-3 py-1.5 text-left text-xs text-zinc-200 transition-colors hover:bg-zinc-800 disabled:opacity-50";
+
+function MenuItem({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} className={MENU_ITEM_CLASS}>
+      {label}
+    </button>
+  );
+}
+
+/**
+ * „⋯"-Menü für Sekundär-Aktionen. Das Panel wird `fixed` an der Triggerposition
+ * gerendert, damit es nicht vom `overflow`-Container der Tabelle abgeschnitten wird.
+ */
+function ActionsMenu({ children }: { children: (close: () => void) => React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  function toggle() {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    const r = btnRef.current?.getBoundingClientRect();
+    if (r) setPos({ top: r.bottom + 4, left: Math.max(8, r.right - 176) });
+    setOpen(true);
   }
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={toggle}
+        aria-label="Weitere Aktionen"
+        className={cn(
+          "rounded border px-2 py-1 text-xs leading-none transition-colors",
+          open
+            ? "border-zinc-600 bg-zinc-800 text-zinc-100"
+            : "border-zinc-700 text-zinc-300 hover:bg-zinc-800",
+        )}
+      >
+        ⋯
+      </button>
+      {open && pos && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div
+            className="fixed z-50 w-44 overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900 py-1 shadow-xl"
+            style={{ top: pos.top, left: pos.left }}
+          >
+            {children(() => setOpen(false))}
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
+function ActionPanel({ r, action, onDone }: { r: Row; action: string; onDone: () => void }) {
   if (action === "roll" && r.kind === "OPTION") {
-    return <RollForm positionId={r.id} currency={r.currency} currentStrike={r.strike} />;
+    return <RollForm positionId={r.id} currency={r.currency} currentStrike={r.strike} onDone={onDone} />;
   }
   if (action === "close") {
     const isStock = r.kind === "STOCK";

@@ -1,14 +1,18 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
 import { Button, Input, NumberInput, Label, Select, FieldError, FormError } from "@/components/ui";
 import { editPosition, type TradeState } from "../trades/actions";
 import type { Row } from "./types";
 
 const dateOnly = (iso: string | null) => (iso ? iso.slice(0, 10) : "");
 
-export function EditForm({ r }: { r: Row }) {
+export function EditForm({ r, onSuccess }: { r: Row; onSuccess?: () => void }) {
   const [state, action, pending] = useActionState(editPosition, {} as TradeState);
+
+  useEffect(() => {
+    if (state.ok) onSuccess?.();
+  }, [state.ok, onSuccess]);
   const open = r.transactions[0];
   const fees = open ? open.fees : 0;
   const note = open ? (open.note ?? "") : "";

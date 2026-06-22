@@ -2,10 +2,11 @@ import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getCashSummary, type CcySummary } from "@/lib/cash";
-import { Card, InfoTip, cn } from "@/components/ui";
+import { Card, InfoTip, Badge, cn } from "@/components/ui";
+import { NewTradeButton } from "./trades/NewTradeButton";
 import { Donut, HBars, CHART_COLORS } from "@/components/charts";
 import { OPTION_MULTIPLIER } from "@/lib/constants";
-import { money, num, pnlClass, toNum } from "@/lib/format";
+import { money, num, pnlClass, toNum, fmtDate } from "@/lib/format";
 
 function CcyList({ map, tone }: { map: Record<string, number>; tone?: boolean }) {
   const e = Object.entries(map).filter(([, v]) => v !== 0);
@@ -23,15 +24,20 @@ function CcyList({ map, tone }: { map: Record<string, number>; tone?: boolean })
 
 export default async function DashboardPage() {
   const user = await requireUser();
-  const [summary, positions] = await Promise.all([
+  const [summary, positions, accounts] = await Promise.all([
     getCashSummary(user.id),
     prisma.position.findMany({
       where: { account: { userId: user.id } },
       select: {
         status: true, kind: true, direction: true, optionRight: true, strike: true,
         qty: true, avgOpenPrice: true, multiplier: true, currency: true, realizedPnl: true,
-        closedAt: true, instrument: { select: { symbol: true } },
+        closedAt: true, expiry: true, instrument: { select: { symbol: true } },
       },
+    }),
+    prisma.account.findMany({
+      where: { userId: user.id },
+      select: { id: true, name: true, baseCurrency: true },
+      orderBy: { createdAt: "asc" },
     }),
   ]);
 
@@ -68,6 +74,22 @@ export default async function DashboardPage() {
   const wins = completed.filter((p) => toNum(p.realizedPnl) > 0).length;
   const winRate = completed.length > 0 ? `${Math.round((wins / completed.length) * 100)} %` : "—";
 
+  // Bald verfallende offene Optionen (≤ 7 Tage, inkl. überfällig)
+  const DAY = 86400000;
+  const nowMs = Date.now();
+  const expiring = positions
+    .filter((p) => p.status === "OPEN" && p.kind === "OPTION" && p.expiry)
+    .map((p) => ({
+      symbol: p.instrument.symbol,
+      optionRight: p.optionRight,
+      strike: p.strike ? toNum(p.strike) : null,
+      direction: p.direction,
+      expiry: p.expiry as Date,
+      daysLeft: Math.ceil((((p.expiry as Date).getTime()) - nowMs) / DAY),
+    }))
+    .filter((o) => o.daysLeft <= 7)
+    .sort((a, b) => a.daysLeft - b.daysLeft);
+
   // Allokation (Hauptwährung)
   const allocation = main
     ? [
@@ -94,7 +116,7 @@ export default async function DashboardPage() {
     .slice(0, 8)
     .map(([label, value], i) => ({ label, value, color: CHART_COLORS[i % CHART_COLORS.length] }));
 
-  // Monatlicher realisierter P&L (Hauptwährung)
+  // Monatlicher realisierter G&V (Hauptwährung)
   const monthly = new Map<string, number>();
   for (const p of positions) {
     if (!p.closedAt || p.currency !== mainCcy) continue;
@@ -113,7 +135,7 @@ export default async function DashboardPage() {
         <h1 className="text-2xl font-semibold">Dashboard</h1>
         <Card>
           <p className="text-zinc-300">
-            Noch keine Konten.{" "}
+            Noch keine Depots.{" "}
             <Link href="/accounts" className="text-emerald-400">Erstes Depot anlegen</Link>, dann Trades erfassen.
           </p>
         </Card>
@@ -125,7 +147,10 @@ export default async function DashboardPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Dashboard</h1>
-        <Link href="/stats" className="text-sm text-emerald-400">Detaillierte Statistik →</Link>
+        <div className="flex items-center gap-3">
+          <Link href="/stats" className="text-sm text-emerald-400">Detaillierte Statistik →</Link>
+          <NewTradeButton accounts={accounts} />
+        </div>
       </div>
 
       {/* Kompakte KPIs */}
@@ -144,7 +169,7 @@ export default async function DashboardPage() {
         </Card>
         <Card>
           <p className="flex items-center text-xs text-zinc-400">
-            Realisierter P&L<InfoTip text="Aus geschlossenen Positionen (inkl. Gebühren)." />
+            Realisierter G&V<InfoTip text="Gewinn/Verlust aus geschlossenen Positionen (inkl. Gebühren)." />
           </p>
           <div className="mt-1 text-base"><CcyList map={realizedByCcy} tone /></div>
         </Card>
@@ -156,6 +181,38 @@ export default async function DashboardPage() {
           <p className="text-xs text-zinc-500">{open} offen · {completed.length} zu</p>
         </Card>
       </div>
+
+      {/* Bald verfallende Optionen */}
+      {expiring.length > 0 && (
+        <Card>
+          <h2 className="mb-3 flex items-center text-sm font-medium text-zinc-300">
+            Verfällt bald
+            <InfoTip text="Offene Optionen, die innerhalb von 7 Tagen verfallen (oder bereits überfällig sind)." />
+          </h2>
+          <div className="divide-y divide-white/5 rounded-lg border border-white/5">
+            {expiring.map((o, i) => (
+              <div key={i} className="flex items-center justify-between px-3 py-2 text-sm">
+                <span className="flex items-center gap-2">
+                  <span className="font-medium">{o.symbol}</span>
+                  <span className="text-zinc-400">
+                    {o.direction === "SHORT" ? "Short" : "Long"} {o.optionRight ?? ""} {o.strike ?? ""}
+                  </span>
+                </span>
+                <span className="flex items-center gap-3">
+                  <span className="text-zinc-400">{fmtDate(o.expiry.toISOString())}</span>
+                  <Badge color={o.daysLeft <= 0 ? "red" : o.daysLeft <= 2 ? "amber" : "zinc"}>
+                    {o.daysLeft <= 0
+                      ? o.daysLeft === 0
+                        ? "heute"
+                        : `${-o.daysLeft} T überfällig`
+                      : `${o.daysLeft} T`}
+                  </Badge>
+                </span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* Kuchendiagramme */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -186,10 +243,10 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      {/* Monatlicher P&L */}
+      {/* Monatlicher G&V */}
       <Card>
         <h2 className="mb-3 flex items-center text-sm font-medium text-zinc-300">
-          Realisierter P&L pro Monat <span className="ml-1 text-xs text-zinc-500">({mainCcy})</span>
+          Realisierter G&V pro Monat <span className="ml-1 text-xs text-zinc-500">({mainCcy})</span>
           <InfoTip text="Realisierter Gewinn/Verlust je Monat (Schlussdatum) in der Hauptwährung." />
         </h2>
         <HBars data={monthlyData} format={(n) => num(n)} />

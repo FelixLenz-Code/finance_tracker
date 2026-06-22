@@ -9,12 +9,15 @@ export function ActionButton({
   label,
   confirmText,
   className,
+  onSelect,
 }: {
   action: (formData: FormData) => Promise<void>;
   positionId: string;
   label: string;
   confirmText: string;
   className?: string;
+  /** Wird beim Klick ausgelöst (z. B. um ein umgebendes Menü zu schließen). */
+  onSelect?: () => void;
 }) {
   const [pending, start] = useTransition();
   return (
@@ -22,6 +25,7 @@ export function ActionButton({
       type="button"
       disabled={pending}
       onClick={() => {
+        onSelect?.();
         if (!confirm(confirmText)) return;
         const fd = new FormData();
         fd.set("positionId", positionId);

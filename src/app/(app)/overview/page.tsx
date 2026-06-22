@@ -2,6 +2,7 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { toNum } from "@/lib/format";
 import { OverviewTable } from "./OverviewTable";
+import { NewTradeButton } from "../trades/NewTradeButton";
 import type { Row, Leg, TxnLite } from "./types";
 
 type PositionWithRel = Awaited<ReturnType<typeof loadPositions>>[number];
@@ -125,7 +126,7 @@ export default async function OverviewPage({
     loadPositions(user.id),
     prisma.account.findMany({
       where: { userId: user.id },
-      select: { id: true, name: true },
+      select: { id: true, name: true, baseCurrency: true },
       orderBy: { createdAt: "asc" },
     }),
   ]);
@@ -134,7 +135,10 @@ export default async function OverviewPage({
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Trades</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">Trades</h1>
+        <NewTradeButton accounts={accounts} />
+      </div>
       <OverviewTable rows={rows} accounts={accounts} initialAccount={account} />
     </div>
   );

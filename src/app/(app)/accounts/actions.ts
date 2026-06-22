@@ -5,6 +5,8 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { accountSchema, formObject } from "@/lib/validation";
+import { depotExportSchema, DEPOT_FORMAT } from "@/lib/depot-transfer";
+import { importDepot } from "@/lib/depot-import";
 
 export type AccountState = { error?: string; fieldErrors?: Record<string, string>; ok?: boolean };
 
@@ -70,6 +72,51 @@ export async function updateAccount(
   revalidatePath("/accounts");
   revalidatePath("/");
   revalidatePath("/cash");
+  return { ok: true };
+}
+
+/**
+ * Importiert ein zuvor exportiertes Depot (JSON) als NEUES Konto des aktuellen
+ * Users. Instrumente werden global per (symbol, exchange) aufgelöst/angelegt,
+ * alle übrigen IDs (Positionen, Roll-Ketten, Transaktionen) werden auf frische
+ * IDs umgemappt. Läuft komplett in einer DB-Transaktion (alles-oder-nichts).
+ */
+export async function importAccount(formData: FormData): Promise<AccountState> {
+  const user = await requireUser();
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { error: "Bitte eine exportierte Depot-Datei (.json) auswählen." };
+  }
+
+  let json: unknown;
+  try {
+    json = JSON.parse(await file.text());
+  } catch {
+    return { error: "Datei ist kein gültiges JSON." };
+  }
+
+  if (typeof json !== "object" || json === null || (json as { format?: unknown }).format !== DEPOT_FORMAT) {
+    return { error: "Unbekanntes Format. Erwartet wird eine vom Trade-Tracker exportierte Depot-Datei." };
+  }
+
+  const parsed = depotExportSchema.safeParse(json);
+  if (!parsed.success) {
+    return { error: `Datei konnte nicht gelesen werden: ${parsed.error.issues[0]?.message ?? "ungültige Struktur"}.` };
+  }
+  const data = parsed.data;
+
+  try {
+    await importDepot(user.id, data);
+  } catch (e) {
+    return { error: `Import fehlgeschlagen: ${e instanceof Error ? e.message : "unbekannter Fehler"}.` };
+  }
+
+  revalidatePath("/accounts");
+  revalidatePath("/");
+  revalidatePath("/cash");
+  revalidatePath("/overview");
+  revalidatePath("/stats");
   return { ok: true };
 }
 

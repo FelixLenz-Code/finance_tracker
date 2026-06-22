@@ -7,7 +7,7 @@ import { createSession, getSession, clearPending2fa, destroySession } from "@/li
 import { verifyTotp } from "@/lib/totp";
 import { isLoginBlocked, recordLoginAttempt, getClientIp } from "@/lib/ratelimit";
 import { createToken, consumeToken } from "@/lib/tokens";
-import { sendMail, mailEnabled } from "@/lib/mail";
+import { sendMail, mailConfigured } from "@/lib/mail";
 import {
   registerSchema,
   loginSchema,
@@ -50,7 +50,7 @@ export async function registerAction(
 
   // Erster Nutzer wird Admin und ist automatisch verifiziert.
   const isFirst = (await prisma.user.count()) === 0;
-  const requireVerification = mailEnabled() && !isFirst;
+  const requireVerification = (await mailConfigured()) && !isFirst;
 
   const user = await prisma.user.create({
     data: {

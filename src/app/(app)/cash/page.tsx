@@ -61,8 +61,11 @@ export default async function CashPage() {
     for (const c of a.cashTransactions) {
       pushBooking(a.id, {
         id: c.id, date: c.date.toISOString(), currency: c.currency, note: c.note, deletable: true,
-        label: c.type === "DEPOSIT" ? "Einzahlung" : "Auszahlung",
-        amount: c.type === "DEPOSIT" ? toNum(c.amount) : -toNum(c.amount),
+        label: c.type === "WITHDRAWAL" ? "Auszahlung" : c.type === "DIVIDEND" ? `Dividende ${c.symbol ?? ""}`.trim() : "Einzahlung",
+        amount: c.type === "WITHDRAWAL" ? -toNum(c.amount) : toNum(c.amount),
+        dividend: c.type === "DIVIDEND",
+        type: c.type,
+        symbol: c.symbol,
       });
     }
   }
@@ -104,7 +107,7 @@ export default async function CashPage() {
       {views.length === 0 ? (
         <Card>
           <p className="text-zinc-300">
-            Noch keine Konten.{" "}
+            Noch keine Depots.{" "}
             <Link href="/accounts" className="text-emerald-400">Depot anlegen</Link>.
           </p>
         </Card>

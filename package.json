@@ -11,7 +11,9 @@
     "db:deploy": "prisma migrate deploy",
     "db:generate": "prisma generate",
     "test:logic": "node --env-file=.env --conditions=react-server --import tsx scripts/logic-test.mts",
-    "seed:demo": "node --env-file=.env --conditions=react-server --import tsx scripts/seed-session.mts"
+    "seed:demo": "node --env-file=.env --conditions=react-server --import tsx scripts/seed-session.mts",
+    "backup": "node --env-file=.env --conditions=react-server --import tsx scripts/backup-run.mts",
+    "restore": "node --env-file=.env --conditions=react-server --import tsx scripts/restore-backup.mts"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.0.2",

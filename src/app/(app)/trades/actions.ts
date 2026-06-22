@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
@@ -17,7 +16,7 @@ import {
   type InstrumentInput,
 } from "@/lib/positions";
 
-export type TradeState = { error?: string; fieldErrors?: Record<string, string> };
+export type TradeState = { error?: string; fieldErrors?: Record<string, string>; ok?: boolean };
 
 function zerr(err: z.ZodError): Record<string, string> {
   const out: Record<string, string> = {};
@@ -143,7 +142,8 @@ export async function createTrade(
 
   revalidatePath("/overview");
   revalidatePath("/");
-  redirect("/overview");
+  revalidatePath("/cash");
+  return { ok: true };
 }
 
 // ---------- Positions-Management (aus der Übersicht) ----------
@@ -268,7 +268,7 @@ export async function editPosition(
   revalidatePath("/overview");
   revalidatePath("/");
   revalidatePath("/cash");
-  return {};
+  return { ok: true };
 }
 
 /** Letzten Roll rückgängig machen: neueste (offene) Position der Kette löschen, Vorgänger wieder öffnen. */
@@ -451,7 +451,7 @@ export async function rollOptionAction(
   });
   revalidatePath("/overview");
   revalidatePath("/");
-  return {};
+  return { ok: true };
 }
 
 async function instrumentForPosition(instrumentId: string): Promise<InstrumentInput> {

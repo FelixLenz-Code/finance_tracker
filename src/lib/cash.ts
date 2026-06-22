@@ -44,8 +44,9 @@ export function txnCashFlow(t: {
 export type CcySummary = {
   currency: string;
   deposited: number; // Einzahlungen − Auszahlungen
+  dividends: number; // erhaltene Dividenden (Cash)
   tradeFlow: number; // Cash aus Trades
-  cashBalance: number; // deposited + tradeFlow
+  cashBalance: number; // deposited + dividends + tradeFlow
   boundStock: number; // Aktien zu Einstand
   boundLongOption: number; // gezahlte Long-Prämien
   shortPutReserve: number; // Cash-Secured-Puts: Strike×100×Kontrakte
@@ -65,6 +66,7 @@ function emptyCcy(currency: string): CcySummary {
   return {
     currency,
     deposited: 0,
+    dividends: 0,
     tradeFlow: 0,
     cashBalance: 0,
     boundStock: 0,
@@ -119,7 +121,8 @@ export async function getCashSummary(userId: string): Promise<AccountSummary[]> 
 
   for (const c of cash) {
     const b = bucket(c.accountId, c.currency);
-    b.deposited += c.type === "DEPOSIT" ? toNum(c.amount) : -toNum(c.amount);
+    if (c.type === "DIVIDEND") b.dividends += toNum(c.amount);
+    else b.deposited += c.type === "DEPOSIT" ? toNum(c.amount) : -toNum(c.amount);
   }
   for (const t of txns) {
     bucket(t.accountId, t.currency).tradeFlow += txnCashFlow(t);
@@ -147,7 +150,7 @@ export async function getCashSummary(userId: string): Promise<AccountSummary[]> 
       if (!ccyMap.has(ccy)) ccyMap.set(ccy, emptyCcy(ccy));
     }
     const byCcy = [...ccyMap.values()].map((b) => {
-      b.cashBalance = b.deposited + b.tradeFlow;
+      b.cashBalance = b.deposited + b.dividends + b.tradeFlow;
       b.bound = b.boundStock + b.boundLongOption + b.shortPutReserve;
       b.free = b.cashBalance - b.shortPutReserve;
       return b;
