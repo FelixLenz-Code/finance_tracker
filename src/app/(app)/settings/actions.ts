@@ -23,6 +23,7 @@ import {
 import { runBackup } from "@/lib/backup";
 import { sendAllRemindersNow } from "@/lib/reminders";
 import { sendMail } from "@/lib/mail";
+import { renderEmail, emailParagraph } from "@/lib/email";
 import { verifyPassword, hashPassword } from "@/lib/password";
 import { encryptSecret, decryptSecret, randomToken } from "@/lib/crypto";
 import {
@@ -224,7 +225,13 @@ export async function sendTestMail(
     await sendMail(
       user.email,
       "Trade Tracker — Test-E-Mail",
-      "<p>Diese Test-E-Mail bestätigt, dass dein SMTP-Server korrekt konfiguriert ist. ✅</p>",
+      renderEmail({
+        heading: "SMTP funktioniert ✅",
+        preheader: "Deine E-Mail-Konfiguration ist korrekt.",
+        bodyHtml:
+          emailParagraph("Diese Test-E-Mail bestätigt, dass dein SMTP-Server korrekt konfiguriert ist.") +
+          emailParagraph("Verifizierungs-, Reset- und Erinnerungs-Mails werden jetzt zuverlässig zugestellt."),
+      }),
     );
   } catch (e) {
     return { error: `Versand fehlgeschlagen: ${e instanceof Error ? e.message : "unbekannter Fehler"}.` };

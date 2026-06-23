@@ -8,6 +8,7 @@ import { verifyTotp } from "@/lib/totp";
 import { isLoginBlocked, recordLoginAttempt, getClientIp } from "@/lib/ratelimit";
 import { createToken, consumeToken } from "@/lib/tokens";
 import { sendMail, mailConfigured } from "@/lib/mail";
+import { renderEmail, emailParagraph, escapeHtml } from "@/lib/email";
 import { isRegistrationEnabled } from "@/lib/settings";
 import {
   registerSchema,
@@ -65,7 +66,14 @@ export async function registerAction(
       await sendMail(
         email,
         "Kontoerstellung",
-        `<p>Es wurde versucht, mit dieser E-Mail-Adresse ein Konto zu erstellen. Du hast bereits ein Konto — bitte melde dich an oder setze bei Bedarf dein Passwort zurück.</p>`,
+        renderEmail({
+          heading: "Konto bereits vorhanden",
+          preheader: "Es wurde versucht, mit dieser E-Mail ein Konto zu erstellen.",
+          bodyHtml:
+            emailParagraph("Es wurde versucht, mit dieser E-Mail-Adresse ein Konto zu erstellen.") +
+            emailParagraph("Du hast bereits ein Konto — bitte melde dich an oder setze bei Bedarf dein Passwort zurück. Falls du das nicht warst, kannst du diese Nachricht ignorieren."),
+          button: { label: "Zur Anmeldung", url: `${APP_URL}/login` },
+        }),
       ).catch(() => {});
       redirect("/login?notice=verify");
     }
@@ -90,7 +98,15 @@ export async function registerAction(
     await sendMail(
       email,
       "E-Mail bestätigen",
-      `<p>Hallo ${name}, bitte bestätige deine E-Mail:</p><p><a href="${link}">${link}</a></p>`,
+      renderEmail({
+        heading: "E-Mail bestätigen",
+        preheader: "Bestätige deine E-Mail-Adresse, um loszulegen.",
+        bodyHtml:
+          emailParagraph(`Hallo ${escapeHtml(name)}, willkommen beim Trade Tracker!`) +
+          emailParagraph("Bitte bestätige deine E-Mail-Adresse, um dein Konto zu aktivieren:"),
+        button: { label: "E-Mail bestätigen", url: link },
+        footnote: `Funktioniert der Button nicht, öffne diesen Link: ${link} — er ist 24 Stunden gültig.`,
+      }),
     );
     redirect("/login?notice=verify");
   }
@@ -215,7 +231,15 @@ export async function requestResetAction(
     await sendMail(
       email,
       "Passwort zurücksetzen",
-      `<p>Passwort zurücksetzen:</p><p><a href="${link}">${link}</a></p>`,
+      renderEmail({
+        heading: "Passwort zurücksetzen",
+        preheader: "Setze dein Passwort über den Link zurück.",
+        bodyHtml:
+          emailParagraph("Es wurde angefordert, dein Passwort zurückzusetzen. Klicke auf den Button, um ein neues Passwort zu vergeben:") +
+          emailParagraph("Falls du das nicht warst, kannst du diese E-Mail ignorieren — dein Passwort bleibt unverändert."),
+        button: { label: "Neues Passwort setzen", url: link },
+        footnote: `Funktioniert der Button nicht, öffne diesen Link: ${link} — er ist 60 Minuten gültig.`,
+      }),
     );
   }
   // Immer gleiche Antwort (keine Account-Enumeration).

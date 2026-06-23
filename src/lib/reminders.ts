@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db";
 import { sendMail, mailConfigured } from "@/lib/mail";
+import { renderEmail, emailParagraph, escapeHtml } from "@/lib/email";
 import { fmtDate, toNum } from "@/lib/format";
 
 export type ReminderResult = { ok: boolean; message: string; users: number; options: number };
@@ -28,19 +29,33 @@ async function expiringForUser(userId: string, days: number) {
 async function sendForUser(u: ReminderUser): Promise<number> {
   const opts = await expiringForUser(u.id, u.reminderDays);
   if (opts.length === 0) return 0;
+  const td = "padding:9px 12px;border-bottom:1px solid rgba(255,255,255,0.06);font:400 14px -apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#e4e4e7;";
+  const th = "padding:9px 12px;text-align:left;border-bottom:1px solid rgba(255,255,255,0.12);font:600 12px -apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#a1a1aa;text-transform:uppercase;letter-spacing:0.4px;";
   const rows = opts
     .map((p) => {
       const dir = p.direction === "SHORT" ? "Short" : "Long";
       const strike = p.strike != null ? toNum(p.strike) : "";
-      return `<tr><td>${p.instrument.symbol}</td><td>${dir} ${p.optionRight ?? ""} ${strike}</td><td>${fmtDate(p.expiry!.toISOString())}</td><td>${p.account.name}</td></tr>`;
+      const pos = escapeHtml(`${dir} ${p.optionRight ?? ""} ${strike}`.trim());
+      return `<tr>
+        <td style="${td}font-weight:600;">${escapeHtml(p.instrument.symbol)}</td>
+        <td style="${td}">${pos}</td>
+        <td style="${td}color:#fca5a5;white-space:nowrap;">${escapeHtml(fmtDate(p.expiry!.toISOString()))}</td>
+        <td style="${td}color:#a1a1aa;">${escapeHtml(p.account.name)}</td>
+      </tr>`;
     })
     .join("");
-  const html = `<p>Folgende offene Optionen verfallen innerhalb von ${u.reminderDays} Tagen:</p>
-    <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse">
-      <thead><tr><th>Symbol</th><th>Position</th><th>Verfall</th><th>Depot</th></tr></thead>
+  const table = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:8px 0 4px;border:1px solid rgba(255,255,255,0.08);border-radius:10px;overflow:hidden;">
+      <thead><tr><th style="${th}">Symbol</th><th style="${th}">Position</th><th style="${th}">Verfall</th><th style="${th}">Depot</th></tr></thead>
       <tbody>${rows}</tbody>
-    </table>
-    <p style="color:#666;font-size:12px">Automatische Erinnerung vom Trade Tracker. Frist/Uhrzeit unter Einstellungen anpassbar.</p>`;
+    </table>`;
+  const html = renderEmail({
+    heading: `${opts.length} Option(en) verfallen bald`,
+    preheader: `Innerhalb der nächsten ${u.reminderDays} Tage verfallen ${opts.length} offene Option(en).`,
+    bodyHtml:
+      emailParagraph(`Folgende offene Optionen verfallen innerhalb von <b style="color:#f4f4f5;">${u.reminderDays} Tagen</b>:`) +
+      table,
+    footnote: "Frist und Uhrzeit der Erinnerung kannst du in den Einstellungen anpassen.",
+  });
   await sendMail(u.email, `Trade Tracker — ${opts.length} Option(en) verfallen bald`, html);
   return opts.length;
 }
