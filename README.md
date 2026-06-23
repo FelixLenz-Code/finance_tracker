@@ -93,7 +93,8 @@ curl -fsSL https://raw.githubusercontent.com/FelixLenz-Code/finance_tracker/main
 `IMAGE=ghcr.io/felixlenz-code/finance_tracker:1.1.1 curl … | bash`. Releases entstehen über
 Git-Tags `vX.Y.Z`; die CI baut daraus in **einem** Lauf `:X.Y.Z` und `:latest`.
 
-Optionen via Umgebungsvariablen: `APP_PORT` (Default 3000), `INSTALL_DIR`, `IMAGE`.
+Optionen via Umgebungsvariablen: `APP_PORT` (Default 3000), `INSTALL_DIR`, `IMAGE`, `APP_URL`,
+`LOCAL_ONLY` (`1` = nur lokal erreichbar, `0` = netzwerkweit; leer = bei der Installation gefragt).
 Für ein **privates** GHCR-Image zusätzlich `GHCR_USER` + `GHCR_TOKEN`
 (Personal Access Token mit `read:packages`) — oder das Package einmalig auf **public** stellen
 (GitHub → Repo → Packages → Package settings → Change visibility).
@@ -102,7 +103,13 @@ Für ein **privates** GHCR-Image zusätzlich `GHCR_USER` + `GHCR_TOKEN`
 > Backup nicht wiederherstellbar. Die App ist für den Betrieb im internen Netz gedacht
 > (Zugriff von außen via VPN). Ist Port 3000 belegt, `APP_PORT=3100 curl … | bash`.
 
-### Zugriff: HTTP (intern) vs. HTTPS (Reverse-Proxy)
+### Zugriff: nur lokal, HTTP (intern) oder HTTPS (Reverse-Proxy)
+
+Bei der Installation fragt der Installer, ob die App **nur lokal** (nur dieser Rechner)
+oder **netzwerkweit** erreichbar sein soll — nicht-interaktiv via `LOCAL_ONLY=1`/`0`. Das
+steuert die Variable `BIND_ADDR` in `$INSTALL_DIR/.env` (`127.0.0.1` = nur lokal,
+`0.0.0.0` = ganzes Netzwerk). Nachträglich änderbar: Wert in der `.env` anpassen und
+`./install.sh update` ausführen.
 
 Die App ist über **HTTP** (`http://<host>:3000`) direkt nutzbar — gedacht für den
 Betrieb im **vertrauenswürdigen internen Netz / VPN**. Dabei ist der Verkehr aber

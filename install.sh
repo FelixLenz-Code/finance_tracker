@@ -22,6 +22,9 @@ fi
 # APP_URL: Basis-URL für generierte Links (E-Mail-Verifizierung, Passwort-Reset).
 # Leer = beim Erzeugen der .env automatisch aus der Host-IP ableiten (statt localhost).
 APP_URL="${APP_URL:-}"
+# Nur lokal erreichbar (Bindung an 127.0.0.1, nur dieser Rechner)? 1/yes/j = ja,
+# 0/no = netzwerkweit, leer = bei interaktiver Installation nachfragen (Default: netzwerkweit).
+LOCAL_ONLY="${LOCAL_ONLY:-}"
 # Für private GHCR-Images optional: GHCR_USER + GHCR_TOKEN setzen.
 GHCR_USER="${GHCR_USER:-}"
 GHCR_TOKEN="${GHCR_TOKEN:-}"
@@ -78,6 +81,25 @@ effective_app_url() {
   printf 'http://%s:%s' "${ip:-localhost}" "$APP_PORT"
 }
 
+# Soll die App nur lokal (127.0.0.1) lauschen? Reihenfolge: explizite Env-Var >
+# interaktive Abfrage (über /dev/tty, auch bei `curl | bash`) > Default netzwerkweit.
+# Gibt "1" für nur-lokal aus, sonst leer.
+resolve_local_only() {
+  case "$(printf '%s' "$LOCAL_ONLY" | tr '[:upper:]' '[:lower:]')" in
+    1|true|yes|y|j|ja)  echo "1"; return ;;
+    0|false|no|n|nein)  echo "";  return ;;
+  esac
+  if [ -r /dev/tty ]; then
+    local ans=""
+    printf 'Nur lokal erreichbar (nur dieser Rechner)? Sonst im ganzen Netzwerk. [j/N]: ' > /dev/tty
+    read -r ans < /dev/tty || ans=""
+    case "$(printf '%s' "$ans" | tr '[:upper:]' '[:lower:]')" in
+      j|ja|y|yes) echo "1"; return ;;
+    esac
+  fi
+  echo ""
+}
+
 ghcr_login_if_needed() {
   if [ -n "$GHCR_TOKEN" ] && [ -n "$GHCR_USER" ]; then
     echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin >/dev/null 2>&1 \
@@ -124,7 +146,8 @@ services:
       SMTP_FROM: "${SMTP_FROM:-Trade Tracker <no-reply@example.com>}"
       TOTP_ISSUER: "${TOTP_ISSUER:-Trade Tracker}"
     ports:
-      - "${APP_PORT:-3000}:3000"
+      # BIND_ADDR=127.0.0.1 → nur lokal erreichbar; 0.0.0.0 (Default) → ganzes Netzwerk.
+      - "${BIND_ADDR:-0.0.0.0}:${APP_PORT:-3000}:3000"
     command: sh -c "npx prisma migrate deploy && npx next start -H 0.0.0.0 -p 3000"
 
 volumes:
@@ -133,21 +156,33 @@ YAML
 }
 
 write_env_if_missing() {
-  local app_url; app_url="$(effective_app_url)"
   if [ -f "$ENV_FILE" ]; then
     c_y "Vorhandene .env beibehalten (AUTH_SECRET/Passwörter bleiben erhalten)."
     # Sicherstellen, dass IMAGE/APP_PORT/APP_URL existieren (für ältere Installs).
     grep -q '^IMAGE=' "$ENV_FILE" || echo "IMAGE=$IMAGE" >> "$ENV_FILE"
     grep -q '^APP_PORT=' "$ENV_FILE" || echo "APP_PORT=$APP_PORT" >> "$ENV_FILE"
+    # Bestehende Bindung respektieren: bei nur-lokaler Installation bleibt localhost.
+    local existing_bind; existing_bind="$(grep -E '^BIND_ADDR=' "$ENV_FILE" | head -n1 | cut -d= -f2-)"
+    local app_url; if [ "$existing_bind" = "127.0.0.1" ]; then app_url="${APP_URL:-http://localhost:$APP_PORT}"; else app_url="$(effective_app_url)"; fi
     local cur_url; cur_url="$(grep -E '^APP_URL=' "$ENV_FILE" | head -n1 | cut -d= -f2-)"
     if [ -z "$cur_url" ]; then
       echo "APP_URL=$app_url" >> "$ENV_FILE"
-    elif printf '%s' "$cur_url" | grep -qiE '^http://localhost(:[0-9]+)?/?$' && [ "$cur_url" != "$app_url" ]; then
+    elif [ "$existing_bind" != "127.0.0.1" ] && printf '%s' "$cur_url" | grep -qiE '^http://localhost(:[0-9]+)?/?$' && [ "$cur_url" != "$app_url" ]; then
       # Alter localhost-Default → auf erreichbare Host-Adresse heben (E-Mail-Links).
       sed -i.bak "s#^APP_URL=.*#APP_URL=$app_url#" "$ENV_FILE" && rm -f "$ENV_FILE.bak"
       c_y "APP_URL von localhost auf $app_url gesetzt (für korrekte E-Mail-Links)."
     fi
     return
+  fi
+  # Bindung wählen: nur lokal (127.0.0.1) oder netzwerkweit (0.0.0.0).
+  local bind_addr app_url
+  if [ -n "$(resolve_local_only)" ]; then
+    bind_addr="127.0.0.1"
+    app_url="${APP_URL:-http://localhost:$APP_PORT}"
+    c_g "Installation nur lokal erreichbar (127.0.0.1) — nur dieser Rechner."
+  else
+    bind_addr="0.0.0.0"
+    app_url="$(effective_app_url)"
   fi
   c_g "Erzeuge neue .env mit zufälligem AUTH_SECRET und DB-Passwort…"
   umask 077
@@ -157,8 +192,10 @@ write_env_if_missing() {
 # beim Wiederherstellen eines Backups MUSS dasselbe AUTH_SECRET verwendet werden.
 # APP_URL steckt in den Links der Verifizierungs-/Reset-Mails — bei Bedarf auf den
 # extern erreichbaren Host/Reverse-Proxy anpassen (z. B. https://tracker.example.com).
+# BIND_ADDR: 127.0.0.1 = nur dieser Rechner, 0.0.0.0 = im ganzen Netzwerk erreichbar.
 IMAGE=$IMAGE
 APP_PORT=$APP_PORT
+BIND_ADDR=$bind_addr
 APP_URL=$app_url
 AUTH_SECRET=$(gen_secret 48)
 POSTGRES_PASSWORD=$(gen_db_password 24)
@@ -215,9 +252,16 @@ is_installed() { [ -f "$COMPOSE_FILE" ]; }
 print_access() {
   local port; port="$(grep -E '^APP_PORT=' "$ENV_FILE" 2>/dev/null | cut -d= -f2)"; port="${port:-$APP_PORT}"
   local url; url="$(grep -E '^APP_URL=' "$ENV_FILE" 2>/dev/null | head -n1 | cut -d= -f2-)"
+  local bind; bind="$(grep -E '^BIND_ADDR=' "$ENV_FILE" 2>/dev/null | head -n1 | cut -d= -f2-)"
   echo
   c_g "Trade Tracker läuft → ${url:-http://localhost:$port}"
-  echo  "Lokal:       http://localhost:${port}"
+  if [ "$bind" = "127.0.0.1" ]; then
+    echo  "Erreichbar:  nur lokal (127.0.0.1) — nur dieser Rechner."
+    echo  "Netzwerkweit öffnen: BIND_ADDR=0.0.0.0 in $ENV_FILE setzen + ./install.sh update."
+  else
+    echo  "Lokal:       http://localhost:${port}"
+    echo  "Nur-lokal binden: BIND_ADDR=127.0.0.1 in $ENV_FILE setzen + ./install.sh update."
+  fi
   echo  "Verzeichnis: $INSTALL_DIR"
   echo  "APP_URL (E-Mail-Links) in $ENV_FILE anpassbar (z. B. hinter Reverse-Proxy)."
   echo  "Erster registrierter Nutzer wird automatisch Admin."
@@ -303,7 +347,8 @@ Trade Tracker — Installer (Linux)
   logs        Folgt den Logs
   uninstall   Entfernt Container/Timer (Daten bleiben)
 
-Umgebungsvariablen: INSTALL_DIR, APP_PORT, IMAGE, GHCR_USER, GHCR_TOKEN
+Umgebungsvariablen: INSTALL_DIR, APP_PORT, IMAGE, APP_URL, LOCAL_ONLY, GHCR_USER, GHCR_TOKEN
+  LOCAL_ONLY=1  → nur lokal erreichbar (127.0.0.1); 0 → netzwerkweit; leer → interaktiv fragen
 EOF
 }
 
