@@ -5,6 +5,31 @@ import { prisma } from "@/lib/db";
 const WINDOW_MINUTES = 15;
 const MAX_FAILED = 8;
 
+// --- Leichtgewichtiger In-Memory-Limiter (Sliding Window) ---
+// Für Endpunkte ohne Passwort-Login (Reset-Anfrage, Registrierung), um Mail-Bombing
+// und Missbrauch zu drosseln. Reicht für das Single-Container-Deployment; der Zustand
+// lebt im Prozess und wird beim Neustart geleert (für Abuse-Schutz akzeptabel).
+const hits = new Map<string, number[]>();
+
+/** true = erlaubt (und gezählt), false = Limit überschritten. */
+export function rateLimit(key: string, max: number, windowMs: number): boolean {
+  const now = Date.now();
+  const recent = (hits.get(key) ?? []).filter((t) => now - t < windowMs);
+  if (recent.length >= max) {
+    hits.set(key, recent);
+    return false;
+  }
+  recent.push(now);
+  hits.set(key, recent);
+  // Gelegentlich verwaiste Keys aufräumen, damit die Map nicht unbegrenzt wächst.
+  if (hits.size > 5000) {
+    for (const [k, ts] of hits) {
+      if (ts.every((t) => now - t >= windowMs)) hits.delete(k);
+    }
+  }
+  return true;
+}
+
 export async function getClientIp(): Promise<string> {
   const h = await headers();
   const fwd = h.get("x-forwarded-for");

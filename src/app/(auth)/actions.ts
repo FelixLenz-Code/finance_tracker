@@ -5,7 +5,7 @@ import { prisma } from "@/lib/db";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { createSession, getSession, clearPending2fa, destroySession } from "@/lib/session";
 import { verifyTotp } from "@/lib/totp";
-import { isLoginBlocked, recordLoginAttempt, getClientIp } from "@/lib/ratelimit";
+import { isLoginBlocked, recordLoginAttempt, getClientIp, rateLimit } from "@/lib/ratelimit";
 import { createToken, consumeToken } from "@/lib/tokens";
 import { sendMail, mailConfigured } from "@/lib/mail";
 import { renderEmail, emailParagraph, escapeHtml } from "@/lib/email";
@@ -46,6 +46,12 @@ export async function registerAction(
   const parsed = registerSchema.safeParse(formObject(formData));
   if (!parsed.success) return { fieldErrors: zodErrors(parsed.error) };
   const { name, email, password } = parsed.data;
+
+  // Missbrauch/Mail-Bombing drosseln (Registrierung kann Verifizierungs-Mails auslösen).
+  const regIp = await getClientIp();
+  if (!rateLimit(`register:${regIp}`, 5, 15 * 60 * 1000)) {
+    return { error: "Zu viele Versuche. Bitte in ein paar Minuten erneut versuchen." };
+  }
 
   // Erster Nutzer wird Admin und ist automatisch verifiziert.
   const isFirst = (await prisma.user.count()) === 0;
@@ -224,7 +230,14 @@ export async function requestResetAction(
   if (!parsed.success) return { fieldErrors: zodErrors(parsed.error) };
   const { email } = parsed.data;
 
-  const user = await prisma.user.findUnique({ where: { email } });
+  // Mail-Bombing/Enumeration drosseln: pro IP und pro Zieladresse. Bei Überschreitung
+  // dieselbe generische Antwort, ohne eine weitere Mail zu versenden.
+  const ip = await getClientIp();
+  const allowed =
+    rateLimit(`reset-ip:${ip}`, 5, 15 * 60 * 1000) &&
+    rateLimit(`reset-mail:${email}`, 3, 60 * 60 * 1000);
+
+  const user = allowed ? await prisma.user.findUnique({ where: { email } }) : null;
   if (user) {
     const token = await createToken(email, "PASSWORD_RESET", 60);
     const link = `${APP_URL}/reset-password?token=${token}`;
