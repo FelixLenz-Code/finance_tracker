@@ -6,6 +6,12 @@ import { randomToken, sha256 } from "@/lib/crypto";
 const COOKIE = "tt_session";
 const SESSION_DAYS = 30;
 
+// `Secure` nur, wenn die App tatsächlich über HTTPS ausgeliefert wird. Diese App
+// ist für den internen Betrieb über HTTP gedacht — würde das Cookie hier (wie bei
+// NODE_ENV=production üblich) immer `Secure` sein, verwürfe der Browser es über
+// http://<host>:3000 und man fliegt bei jedem Request zurück zum Login.
+const SECURE_COOKIE = (process.env.APP_URL ?? "").startsWith("https://");
+
 export type SessionWithUser = NonNullable<Awaited<ReturnType<typeof getSession>>>;
 
 /** Neue Session anlegen, Cookie setzen. pending2fa=true für den TOTP-Zwischenschritt. */
@@ -22,7 +28,7 @@ export async function createSession(userId: string, pending2fa = false): Promise
   store.set(COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: SECURE_COOKIE,
     path: "/",
     expires: expiresAt,
   });
