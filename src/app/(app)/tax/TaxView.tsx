@@ -38,6 +38,13 @@ export type TradeItem = {
   cashFlow: number;
 };
 
+export type FxGainItem = {
+  date: string;
+  accountId: string;
+  currency: string; // Basiswährung (Ergebnis-Währung)
+  pnl: number;
+};
+
 type Account = { id: string; name: string };
 
 const TXN_LABEL: Record<string, string> = {
@@ -63,15 +70,15 @@ function add(b: Bucket, v: number) {
 }
 const net = (b: Bucket) => b.gain + b.loss;
 
-type CcyReport = { currency: string; stock: Bucket; option: Bucket; dividends: number };
+type CcyReport = { currency: string; stock: Bucket; option: Bucket; dividends: number; fx: Bucket };
 
-// Gesamtsumme je Währung über Aktien + Optionen + Dividenden (keine Währungsmischung).
+// Gesamtsumme je Währung über Aktien + Optionen + Dividenden + Währungsgewinne.
 type Totals = { gain: number; loss: number; saldo: number };
 function totalsOf(rep: CcyReport): Totals {
   return {
-    gain: rep.stock.gain + rep.option.gain + Math.max(rep.dividends, 0),
-    loss: rep.stock.loss + rep.option.loss + Math.min(rep.dividends, 0),
-    saldo: net(rep.stock) + net(rep.option) + rep.dividends,
+    gain: rep.stock.gain + rep.option.gain + Math.max(rep.dividends, 0) + rep.fx.gain,
+    loss: rep.stock.loss + rep.option.loss + Math.min(rep.dividends, 0) + rep.fx.loss,
+    saldo: net(rep.stock) + net(rep.option) + rep.dividends + net(rep.fx),
   };
 }
 
@@ -92,11 +99,13 @@ export function TaxView({
   realized,
   trades,
   dividends,
+  fxGains,
   accounts,
 }: {
   realized: RealizedItem[];
   trades: TradeItem[];
   dividends: DividendItem[];
+  fxGains: FxGainItem[];
   accounts: Account[];
 }) {
   const years = useMemo(() => {
@@ -104,8 +113,9 @@ export function TaxView({
     realized.forEach((r) => s.add(yearOf(r.realizedAt)));
     trades.forEach((t) => s.add(yearOf(t.date)));
     dividends.forEach((d) => s.add(yearOf(d.date)));
+    fxGains.forEach((f) => s.add(yearOf(f.date)));
     return [...s].sort((a, b) => b - a);
-  }, [realized, trades, dividends]);
+  }, [realized, trades, dividends, fxGains]);
 
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState<number>(years.includes(currentYear) ? currentYear : years[0] ?? currentYear);
@@ -157,13 +167,14 @@ export function TaxView({
     const map = new Map<string, CcyReport>();
     const get = (ccy: string) => {
       let r = map.get(ccy);
-      if (!r) map.set(ccy, (r = { currency: ccy, stock: emptyBucket(), option: emptyBucket(), dividends: 0 }));
+      if (!r) map.set(ccy, (r = { currency: ccy, stock: emptyBucket(), option: emptyBucket(), dividends: 0, fx: emptyBucket() }));
       return r;
     };
     for (const r of realizedYear) add(r.kind === "STOCK" ? get(r.currency).stock : get(r.currency).option, r.pnl);
     for (const d of dividends) if (yearOf(d.date) === year && accOk(d.accountId)) get(d.currency).dividends += d.amount;
+    for (const f of fxGains) if (yearOf(f.date) === year && accOk(f.accountId)) add(get(f.currency).fx, f.pnl);
     return [...map.values()].sort((a, b) => a.currency.localeCompare(b.currency));
-  }, [realizedYear, dividends, year, account]);
+  }, [realizedYear, dividends, fxGains, year, account]);
 
   function exportCsv() {
     const sep = ";";
@@ -182,6 +193,9 @@ export function TaxView({
       lines.push([rep.currency, "Aktien", dec(rep.stock.gain), dec(rep.stock.loss), dec(net(rep.stock))].join(sep));
       lines.push([rep.currency, "Optionen / Termingeschäfte", dec(rep.option.gain), dec(rep.option.loss), dec(net(rep.option))].join(sep));
       lines.push([rep.currency, "Dividenden", dec(rep.dividends), "", dec(rep.dividends)].join(sep));
+      if (rep.fx.gain !== 0 || rep.fx.loss !== 0) {
+        lines.push([rep.currency, "Währungsgewinne", dec(rep.fx.gain), dec(rep.fx.loss), dec(net(rep.fx))].join(sep));
+      }
       const t = totalsOf(rep);
       lines.push([rep.currency, "Gesamt", dec(t.gain), dec(t.loss), dec(t.saldo)].join(sep));
     }
@@ -230,6 +244,7 @@ export function TaxView({
           <tr><td>Aktien</td>${cell(rep.stock.gain, rep.currency, "pos")}${cell(rep.stock.loss, rep.currency, "neg")}${cell(net(rep.stock), rep.currency)}</tr>
           <tr><td>Optionen / Termingeschäfte</td>${cell(rep.option.gain, rep.currency, "pos")}${cell(rep.option.loss, rep.currency, "neg")}${cell(net(rep.option), rep.currency)}</tr>
           <tr><td>Dividenden</td>${cell(rep.dividends, rep.currency, "div")}<td class="r">—</td>${cell(rep.dividends, rep.currency, "div")}</tr>
+          ${rep.fx.gain !== 0 || rep.fx.loss !== 0 ? `<tr><td>Währungsgewinne</td>${cell(rep.fx.gain, rep.currency, "pos")}${cell(rep.fx.loss, rep.currency, "neg")}${cell(net(rep.fx), rep.currency)}</tr>` : ""}
           <tr class="tot"><td>Gesamt</td>${cell(totalsOf(rep).gain, rep.currency, "pos")}${cell(totalsOf(rep).loss, rep.currency, "neg")}${cell(totalsOf(rep).saldo, rep.currency)}</tr>
         </tbody>
       </table>`,
@@ -384,6 +399,10 @@ export function TaxView({
                     <td className={tdr}>—</td>
                     <td className={cn(tdr, "font-medium text-blue-400")}>{money(rep.dividends, rep.currency)}</td>
                   </tr>
+                  {(rep.fx.gain !== 0 || rep.fx.loss !== 0) && (
+                    <SummaryRow label="Währungsgewinne" b={rep.fx} ccy={rep.currency}
+                      info="Realisierter Gewinn/Verlust aus Währungstausch (Ø-Einstand). In DE: private Veräußerungsgeschäfte (§23), 1-Jahres-Frist beachten." />
+                  )}
                   {(() => {
                     const t = totalsOf(rep);
                     return (

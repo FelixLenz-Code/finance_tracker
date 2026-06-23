@@ -64,12 +64,14 @@ const transactionSchema = z.object({
 });
 
 const cashTxnSchema = z.object({
-  type: z.enum(["DEPOSIT", "WITHDRAWAL", "DIVIDEND"]),
+  type: z.enum(["DEPOSIT", "WITHDRAWAL", "DIVIDEND", "EXCHANGE"]),
   amount: decimalStr,
   currency: z.string(),
   date: isoDate,
   symbol: z.string().nullish(),
   note: z.string().nullish(),
+  toCurrency: z.string().nullish(),
+  toAmount: decimalStr.nullish(),
 });
 
 export const depotExportSchema = z.object({

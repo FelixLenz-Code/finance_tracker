@@ -87,6 +87,8 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       date: c.date.toISOString(),
       symbol: c.symbol,
       note: c.note,
+      toCurrency: c.toCurrency,
+      toAmount: dec(c.toAmount),
     })),
   };
 

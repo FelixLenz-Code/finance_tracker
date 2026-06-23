@@ -113,6 +113,7 @@ enum CashTxnType {
   DEPOSIT
   WITHDRAWAL
   DIVIDEND
+  EXCHANGE
 }
 
 model CashTransaction {
@@ -120,11 +121,14 @@ model CashTransaction {
   accountId String
   account   Account     @relation(fields: [accountId], references: [id], onDelete: Cascade)
   type      CashTxnType
-  amount    Decimal     @db.Decimal(18, 2)
+  amount    Decimal     @db.Decimal(18, 2) // bei EXCHANGE: Quell-Betrag (in `currency`)
   currency  String
   date      DateTime
   symbol    String? // bei Dividenden: Aktie/Wertpapier, von dem die Dividende stammt
   note      String?
+  // Nur bei EXCHANGE (Währungstausch): Ziel-Seite. Eine Seite ist immer die Basiswährung.
+  toCurrency String?
+  toAmount   Decimal? @db.Decimal(18, 2)
   createdAt DateTime    @default(now())
 
   @@index([accountId])

@@ -59,6 +59,16 @@ export default async function CashPage() {
   };
   for (const a of accounts) {
     for (const c of a.cashTransactions) {
+      if (c.type === "EXCHANGE") {
+        pushBooking(a.id, {
+          id: c.id, date: c.date.toISOString(), currency: c.currency, note: c.note, deletable: true,
+          label: `Tausch ${c.currency}→${c.toCurrency ?? ""}`,
+          amount: 0,
+          type: "EXCHANGE",
+          exchange: { fromAmount: toNum(c.amount), fromCcy: c.currency, toAmount: toNum(c.toAmount), toCcy: c.toCurrency ?? "" },
+        });
+        continue;
+      }
       pushBooking(a.id, {
         id: c.id, date: c.date.toISOString(), currency: c.currency, note: c.note, deletable: true,
         label: c.type === "WITHDRAWAL" ? "Auszahlung" : c.type === "DIVIDEND" ? `Dividende ${c.symbol ?? ""}`.trim() : "Einzahlung",
@@ -98,6 +108,7 @@ export default async function CashPage() {
       bookings: (bookingsByAccount.get(acc.accountId) ?? [])
         .sort((x, y) => new Date(y.date).getTime() - new Date(x.date).getTime())
         .slice(0, 40),
+      realizedFx: acc.realizedFx,
     };
   });
 

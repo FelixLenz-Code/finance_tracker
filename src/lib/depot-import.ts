@@ -120,6 +120,8 @@ export async function importDepot(userId: string, data: DepotExport): Promise<st
             date: new Date(c.date),
             symbol: c.symbol ?? null,
             note: c.note ?? null,
+            toCurrency: c.toCurrency ?? null,
+            toAmount: c.toAmount ?? null,
           },
         });
       }

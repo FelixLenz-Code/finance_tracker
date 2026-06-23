@@ -1,8 +1,8 @@
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { toNum } from "@/lib/format";
-import { txnCashFlow } from "@/lib/cash";
-import { TaxView, type RealizedItem, type DividendItem, type TradeItem } from "./TaxView";
+import { txnCashFlow, getFxRealizedEvents } from "@/lib/cash";
+import { TaxView, type RealizedItem, type DividendItem, type TradeItem, type FxGainItem } from "./TaxView";
 
 // Transaktionstypen, die G&V realisieren (zur Bestimmung des Realisierungsdatums).
 const CLOSING = new Set(["SELL", "BUY_TO_CLOSE", "SELL_TO_CLOSE", "ASSIGNMENT", "EXPIRATION"]);
@@ -33,6 +33,14 @@ export default async function TaxPage() {
     }),
     prisma.account.findMany({ where: { userId: user.id }, select: { id: true, name: true }, orderBy: { createdAt: "asc" } }),
   ]);
+
+  const fxRaw = await getFxRealizedEvents(user.id);
+  const fxGains: FxGainItem[] = fxRaw.map((e) => ({
+    date: e.date,
+    accountId: e.accountId,
+    currency: e.baseCurrency,
+    pnl: e.pnl,
+  }));
 
   const realized: RealizedItem[] = [];
   const trades: TradeItem[] = [];
@@ -88,7 +96,7 @@ export default async function TaxPage() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Steuer</h1>
-      <TaxView realized={realized} trades={trades} dividends={divItems} accounts={accounts} />
+      <TaxView realized={realized} trades={trades} dividends={divItems} fxGains={fxGains} accounts={accounts} />
     </div>
   );
 }

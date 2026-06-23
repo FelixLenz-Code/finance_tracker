@@ -61,6 +61,12 @@ export default async function DashboardPage() {
     realizedByCcy[c.currency] = c.realizedPnl;
     boundByCcy[c.currency] = c.bound;
   }
+  // Realisiertes Währungsergebnis je Basiswährung (über alle Konten).
+  const fxByCcy: Record<string, number> = {};
+  for (const acc of summary) {
+    if (acc.realizedFx) fxByCcy[acc.baseCurrency] = (fxByCcy[acc.baseCurrency] ?? 0) + acc.realizedFx;
+  }
+  const hasFx = Object.values(fxByCcy).some((v) => v !== 0);
 
   // Hauptwährung = größtes gebundenes + Cash-Volumen
   const main =
@@ -180,6 +186,14 @@ export default async function DashboardPage() {
           <p className="mt-1 text-2xl font-bold">{winRate}</p>
           <p className="text-xs text-zinc-500">{open} offen · {completed.length} zu</p>
         </Card>
+        {hasFx && (
+          <Card>
+            <p className="flex items-center text-xs text-zinc-400">
+              Währungsergebnis<InfoTip text="Realisierter Gewinn/Verlust aus Währungstausch (Ø-Einstand), je Basiswährung." />
+            </p>
+            <div className="mt-1 text-base"><CcyList map={fxByCcy} tone /></div>
+          </Card>
+        )}
       </div>
 
       {/* Bald verfallende Optionen */}

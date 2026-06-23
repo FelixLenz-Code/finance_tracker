@@ -19,6 +19,13 @@ export type StatRow = {
   closedAt: string | null;
 };
 
+export type FxEvent = {
+  accountId: string;
+  date: string; // ISO
+  currency: string; // Basiswährung (Ergebnis-Währung)
+  pnl: number;
+};
+
 type Bucket = {
   realizedByCcy: Record<string, number>;
   open: number;
@@ -76,9 +83,11 @@ function winRateLabel(b: Bucket): string {
 export function StatsView({
   rows,
   accounts,
+  fxEvents,
 }: {
   rows: StatRow[];
   accounts: { id: string; name: string }[];
+  fxEvents: FxEvent[];
 }) {
   const [account, setAccount] = useState("ALL");
   const [kind, setKind] = useState("ALL");
@@ -100,6 +109,20 @@ export function StatsView({
       }),
     [rows, account, kind, from, to],
   );
+
+  // Realisiertes Währungsergebnis (unabhängig vom Art-Filter, da keine Position).
+  const fxByCcy = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const e of fxEvents) {
+      if (account !== "ALL" && e.accountId !== account) continue;
+      const d = e.date.slice(0, 10);
+      if (from && d < from) continue;
+      if (to && d > to) continue;
+      m[e.currency] = (m[e.currency] ?? 0) + e.pnl;
+    }
+    return m;
+  }, [fxEvents, account, from, to]);
+  const hasFx = Object.values(fxByCcy).some((v) => v !== 0);
 
   const thisYear = new Date().getFullYear();
   const setYearRange = (y: number) => {
@@ -234,6 +257,15 @@ export function StatsView({
           <p className="mt-1 text-2xl font-bold">{overall.completed}</p>
           <p className="text-xs text-zinc-500">davon {overall.rolled} gerollt</p>
         </Card>
+        {hasFx && (
+          <Card>
+            <p className="flex items-center text-xs text-zinc-400">
+              Währungsergebnis
+              <InfoTip text="Realisierter Gewinn/Verlust aus Währungstausch (Ø-Einstand) im gewählten Zeitraum, je Basiswährung." />
+            </p>
+            <div className="mt-1 text-base"><CcyAmounts map={fxByCcy} /></div>
+          </Card>
+        )}
       </div>
 
       {/* Pro Depot (nur bei "Alle Depots") */}

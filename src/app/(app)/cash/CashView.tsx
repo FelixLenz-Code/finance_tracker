@@ -6,6 +6,7 @@ import { Modal } from "@/components/Modal";
 import { money, num, fmtDate, pnlClass } from "@/lib/format";
 import type { CcySummary } from "@/lib/cash";
 import { CashForm } from "./CashForm";
+import { ExchangeForm } from "./ExchangeForm";
 import { DeleteCashButton } from "./DeleteCashButton";
 
 export type Holding = { symbol: string; qty: number; avg: number; currency: string };
@@ -18,8 +19,9 @@ export type Booking = {
   note: string | null;
   deletable: boolean;
   dividend?: boolean;
-  type?: "DEPOSIT" | "WITHDRAWAL" | "DIVIDEND";
+  type?: "DEPOSIT" | "WITHDRAWAL" | "DIVIDEND" | "EXCHANGE";
   symbol?: string | null;
+  exchange?: { fromAmount: number; fromCcy: string; toAmount: number; toCcy: string };
 };
 export type AccountCashView = {
   id: string;
@@ -29,6 +31,7 @@ export type AccountCashView = {
   byCcy: CcySummary[];
   holdings: Holding[];
   bookings: Booking[];
+  realizedFx: number;
 };
 
 /** Kompakte Label→Wert-Zeile innerhalb einer Gruppe. */
@@ -82,7 +85,7 @@ function SplitBar({ segments, currency }: {
   );
 }
 
-function CurrencyCard({ c }: { c: CcySummary }) {
+function CurrencyCard({ c, isBase, realizedFx }: { c: CcySummary; isBase: boolean; realizedFx: number }) {
   const freePos = Math.max(c.free, 0);
   return (
     <Card className="space-y-4">
@@ -137,6 +140,10 @@ function CurrencyCard({ c }: { c: CcySummary }) {
             info="Summe der im Kontostand erfassten Dividendeneingänge." />
           <Stat label="Realisierter G&V" value={c.realizedPnl} currency={c.currency} tone
             info="Realisierter Gewinn/Verlust aus geschlossenen Positionen (inkl. Gebühren)." />
+          {isBase && realizedFx !== 0 && (
+            <Stat label="Währungsergebnis (real.)" value={realizedFx} currency={c.currency} tone
+              info="Realisierter Gewinn/Verlust aus Währungstausch (Ø-Einstand), in Basiswährung." />
+          )}
         </Group>
       </div>
     </Card>
@@ -146,6 +153,7 @@ function CurrencyCard({ c }: { c: CcySummary }) {
 export function CashView({ accounts }: { accounts: AccountCashView[] }) {
   const [activeId, setActiveId] = useState(accounts[0]?.id ?? "");
   const [showForm, setShowForm] = useState(false);
+  const [showExchange, setShowExchange] = useState(false);
   const [editBooking, setEditBooking] = useState<Booking | null>(null);
   const acc = accounts.find((a) => a.id === activeId) ?? accounts[0];
   if (!acc) return null;
@@ -170,9 +178,14 @@ export function CashView({ accounts }: { accounts: AccountCashView[] }) {
             </button>
           ))}
         </div>
-        <Button variant="secondary" onClick={() => setShowForm(true)}>
-          + Buchung
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => setShowExchange(true)}>
+            ⇄ Währungstausch
+          </Button>
+          <Button variant="secondary" onClick={() => setShowForm(true)}>
+            + Buchung
+          </Button>
+        </div>
       </div>
 
       {/* Buchung erfassen (Popup) */}
@@ -188,8 +201,23 @@ export function CashView({ accounts }: { accounts: AccountCashView[] }) {
         </Modal>
       )}
 
+      {/* Währungstausch (Popup) */}
+      {showExchange && (
+        <Modal title={`Währungstausch · ${acc.name}`} onClose={() => setShowExchange(false)}>
+          <ExchangeForm
+            key={acc.id}
+            accountId={acc.id}
+            baseCurrency={acc.baseCurrency}
+            currencies={acc.currencies}
+            onSuccess={() => setShowExchange(false)}
+          />
+        </Modal>
+      )}
+
       {/* Saldo & Kennzahlen je Währung */}
-      {acc.byCcy.map((c) => <CurrencyCard key={c.currency} c={c} />)}
+      {acc.byCcy.map((c) => (
+        <CurrencyCard key={c.currency} c={c} isBase={c.currency === acc.baseCurrency} realizedFx={acc.realizedFx} />
+      ))}
 
       {/* Bestand */}
       {acc.holdings.length > 0 && (
@@ -234,16 +262,24 @@ export function CashView({ accounts }: { accounts: AccountCashView[] }) {
             {acc.bookings.map((b) => (
               <div key={b.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
                 <span className="flex min-w-0 items-center gap-2">
-                  <Badge color={b.dividend ? "blue" : b.deletable ? (b.amount >= 0 ? "green" : "amber") : "zinc"}>{b.label}</Badge>
+                  <Badge color={b.type === "EXCHANGE" ? "blue" : b.dividend ? "blue" : b.deletable ? (b.amount >= 0 ? "green" : "amber") : "zinc"}>{b.label}</Badge>
                   <span className="text-zinc-400">{fmtDate(b.date)}</span>
                   {b.note && <span className="truncate text-zinc-500">· {b.note}</span>}
                 </span>
                 <span className="flex shrink-0 items-center gap-3">
-                  <span className={cn("font-medium", b.dividend ? "text-blue-400" : b.amount >= 0 ? "text-emerald-400" : "text-amber-400")}>
-                    {b.amount >= 0 ? "+" : "−"}
-                    {money(Math.abs(b.amount), b.currency)}
-                  </span>
-                  {b.deletable && (
+                  {b.type === "EXCHANGE" && b.exchange ? (
+                    <span className="font-medium text-zinc-300">
+                      <span className="text-amber-400">−{money(b.exchange.fromAmount, b.exchange.fromCcy)}</span>
+                      {" → "}
+                      <span className="text-emerald-400">+{money(b.exchange.toAmount, b.exchange.toCcy)}</span>
+                    </span>
+                  ) : (
+                    <span className={cn("font-medium", b.dividend ? "text-blue-400" : b.amount >= 0 ? "text-emerald-400" : "text-amber-400")}>
+                      {b.amount >= 0 ? "+" : "−"}
+                      {money(Math.abs(b.amount), b.currency)}
+                    </span>
+                  )}
+                  {b.deletable && b.type !== "EXCHANGE" && (
                     <button
                       type="button"
                       onClick={() => setEditBooking(b)}
