@@ -66,10 +66,10 @@ gen_db_password() {
 detect_host_ip() {
   local ip=""
   if command -v ip >/dev/null 2>&1; then
-    ip="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')"
+    ip="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}' || true)"
   fi
   if [ -z "$ip" ] && command -v hostname >/dev/null 2>&1; then
-    ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+    ip="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
   fi
   printf '%s' "$ip"
 }
@@ -162,9 +162,9 @@ write_env_if_missing() {
     grep -q '^IMAGE=' "$ENV_FILE" || echo "IMAGE=$IMAGE" >> "$ENV_FILE"
     grep -q '^APP_PORT=' "$ENV_FILE" || echo "APP_PORT=$APP_PORT" >> "$ENV_FILE"
     # Bestehende Bindung respektieren: bei nur-lokaler Installation bleibt localhost.
-    local existing_bind; existing_bind="$(grep -E '^BIND_ADDR=' "$ENV_FILE" | head -n1 | cut -d= -f2-)"
+    local existing_bind; existing_bind="$(grep -E '^BIND_ADDR=' "$ENV_FILE" | head -n1 | cut -d= -f2- || true)"
     local app_url; if [ "$existing_bind" = "127.0.0.1" ]; then app_url="${APP_URL:-http://localhost:$APP_PORT}"; else app_url="$(effective_app_url)"; fi
-    local cur_url; cur_url="$(grep -E '^APP_URL=' "$ENV_FILE" | head -n1 | cut -d= -f2-)"
+    local cur_url; cur_url="$(grep -E '^APP_URL=' "$ENV_FILE" | head -n1 | cut -d= -f2- || true)"
     if [ -z "$cur_url" ]; then
       echo "APP_URL=$app_url" >> "$ENV_FILE"
     elif [ "$existing_bind" != "127.0.0.1" ] && printf '%s' "$cur_url" | grep -qiE '^http://localhost(:[0-9]+)?/?$' && [ "$cur_url" != "$app_url" ]; then
