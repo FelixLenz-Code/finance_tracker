@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import Link from "next/link";
 import { Button, Input, Label, FieldError, FormError } from "@/components/ui";
 import type { ActionState } from "./actions";
@@ -19,6 +19,45 @@ function Notice({ message }: { message?: string | null }) {
   return (
     <div className="rounded-md border border-emerald-900 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-300">
       {message}
+    </div>
+  );
+}
+
+/** Heuristische Passwort-Stärke (0–4) aus Länge und Zeichenvielfalt. */
+function passwordScore(pw: string): number {
+  if (!pw) return 0;
+  let s = 0;
+  if (pw.length >= 10) s++;
+  if (pw.length >= 14) s++;
+  if (/[a-z]/.test(pw) && /[A-Z]/.test(pw)) s++;
+  if (/\d/.test(pw)) s++;
+  if (/[^A-Za-z0-9]/.test(pw)) s++;
+  return Math.min(s, 4);
+}
+
+const STRENGTH = [
+  { label: "Sehr schwach", color: "bg-red-500", text: "text-red-400" },
+  { label: "Schwach", color: "bg-red-500", text: "text-red-400" },
+  { label: "Okay", color: "bg-amber-500", text: "text-amber-400" },
+  { label: "Gut", color: "bg-emerald-500", text: "text-emerald-400" },
+  { label: "Stark", color: "bg-emerald-400", text: "text-emerald-300" },
+];
+
+function PasswordStrength({ value }: { value: string }) {
+  if (!value) return null;
+  const score = passwordScore(value);
+  const s = STRENGTH[score];
+  return (
+    <div className="mt-2">
+      <div className="flex gap-1" aria-hidden>
+        {[0, 1, 2, 3].map((i) => (
+          <span
+            key={i}
+            className={`h-1 flex-1 rounded-full ${i < Math.max(score, 1) && score > 0 ? s.color : "bg-zinc-700"}`}
+          />
+        ))}
+      </div>
+      <p className={`mt-1 text-xs ${s.text}`}>Passwortstärke: {s.label}</p>
     </div>
   );
 }
@@ -64,6 +103,7 @@ export function LoginForm({
 
 export function RegisterForm() {
   const [state, action, pending] = useActionState(registerAction, initial);
+  const [pw, setPw] = useState("");
   return (
     <form action={action} className="space-y-4">
       <FormError message={state.error} />
@@ -79,7 +119,18 @@ export function RegisterForm() {
       </div>
       <div>
         <Label htmlFor="password">Passwort</Label>
-        <Input id="password" name="password" type="password" autoComplete="new-password" required />
+        <Input
+          id="password"
+          name="password"
+          type="password"
+          autoComplete="new-password"
+          minLength={10}
+          maxLength={128}
+          required
+          value={pw}
+          onChange={(e) => setPw(e.target.value)}
+        />
+        <PasswordStrength value={pw} />
         <FieldError message={state.fieldErrors?.password} />
       </div>
       <div>
@@ -138,13 +189,25 @@ export function ForgotForm() {
 
 export function ResetForm({ token }: { token: string }) {
   const [state, action, pending] = useActionState(resetPasswordAction, initial);
+  const [pw, setPw] = useState("");
   return (
     <form action={action} className="space-y-4">
       <input type="hidden" name="token" value={token} />
       <FormError message={state.error} />
       <div>
         <Label htmlFor="password">Neues Passwort</Label>
-        <Input id="password" name="password" type="password" autoComplete="new-password" required />
+        <Input
+          id="password"
+          name="password"
+          type="password"
+          autoComplete="new-password"
+          minLength={10}
+          maxLength={128}
+          required
+          value={pw}
+          onChange={(e) => setPw(e.target.value)}
+        />
+        <PasswordStrength value={pw} />
         <FieldError message={state.fieldErrors?.password} />
       </div>
       <div>

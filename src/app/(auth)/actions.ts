@@ -9,7 +9,10 @@ import { isLoginBlocked, recordLoginAttempt, getClientIp, rateLimit } from "@/li
 import { createToken, consumeToken } from "@/lib/tokens";
 import { sendMail, mailConfigured } from "@/lib/mail";
 import { renderEmail, emailParagraph, escapeHtml } from "@/lib/email";
+import { isPasswordCompromised } from "@/lib/password-policy";
 import { isRegistrationEnabled } from "@/lib/settings";
+
+const PWNED_MSG = "Dieses Passwort taucht in bekannten Datenlecks auf — bitte ein anderes wählen.";
 import {
   registerSchema,
   loginSchema,
@@ -51,6 +54,10 @@ export async function registerAction(
   const regIp = await getClientIp();
   if (!rateLimit(`register:${regIp}`, 5, 15 * 60 * 1000)) {
     return { error: "Zu viele Versuche. Bitte in ein paar Minuten erneut versuchen." };
+  }
+
+  if (await isPasswordCompromised(password)) {
+    return { fieldErrors: { password: PWNED_MSG } };
   }
 
   // Erster Nutzer wird Admin und ist automatisch verifiziert.
@@ -267,6 +274,11 @@ export async function resetPasswordAction(
 ): Promise<ActionState> {
   const parsed = resetPasswordSchema.safeParse(formObject(formData));
   if (!parsed.success) return { fieldErrors: zodErrors(parsed.error) };
+
+  // Vor dem Verbrauch des Tokens prüfen, damit der Link bei Ablehnung gültig bleibt.
+  if (await isPasswordCompromised(parsed.data.password)) {
+    return { fieldErrors: { password: PWNED_MSG } };
+  }
 
   const email = await consumeToken(parsed.data.token, "PASSWORD_RESET");
   if (!email) return { error: "Link ungültig oder abgelaufen." };

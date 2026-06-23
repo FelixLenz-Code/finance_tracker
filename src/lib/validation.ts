@@ -4,7 +4,7 @@ export const registerSchema = z
   .object({
     name: z.string().trim().min(1, "Name erforderlich").max(80),
     email: z.string().trim().toLowerCase().email("Ungültige E-Mail"),
-    password: z.string().min(10, "Mindestens 10 Zeichen"),
+    password: z.string().min(10, "Mindestens 10 Zeichen").max(128, "Höchstens 128 Zeichen"),
     confirm: z.string(),
   })
   .refine((d) => d.password === d.confirm, {
@@ -28,7 +28,7 @@ export const requestResetSchema = z.object({
 export const resetPasswordSchema = z
   .object({
     token: z.string().min(1),
-    password: z.string().min(10, "Mindestens 10 Zeichen"),
+    password: z.string().min(10, "Mindestens 10 Zeichen").max(128, "Höchstens 128 Zeichen"),
     confirm: z.string(),
   })
   .refine((d) => d.password === d.confirm, {

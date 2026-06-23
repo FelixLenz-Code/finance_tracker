@@ -93,7 +93,7 @@ curl -fsSL https://raw.githubusercontent.com/FelixLenz-Code/finance_tracker/main
 ```
 
 **Versionen:** `:latest` (= das jeweils neueste Release) oder ein fixes Release, z. B.
-`IMAGE=ghcr.io/felixlenz-code/finance_tracker:1.1.4 curl … | bash`. Releases entstehen über
+`IMAGE=ghcr.io/felixlenz-code/finance_tracker:1.1.5 curl … | bash`. Releases entstehen über
 Git-Tags `vX.Y.Z`; die CI baut daraus in **einem** Lauf `:X.Y.Z` und `:latest`.
 
 Optionen via Umgebungsvariablen: `APP_PORT` (Default 3000), `INSTALL_DIR`, `IMAGE`, `APP_URL`,
