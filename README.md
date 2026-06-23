@@ -90,7 +90,7 @@ curl -fsSL https://raw.githubusercontent.com/FelixLenz-Code/finance_tracker/main
 ```
 
 **Versionen:** `:latest` (= das jeweils neueste Release) oder ein fixes Release, z. B.
-`IMAGE=ghcr.io/felixlenz-code/finance_tracker:1.1.0 curl … | bash`. Releases entstehen über
+`IMAGE=ghcr.io/felixlenz-code/finance_tracker:1.1.1 curl … | bash`. Releases entstehen über
 Git-Tags `vX.Y.Z`; die CI baut daraus in **einem** Lauf `:X.Y.Z` und `:latest`.
 
 Optionen via Umgebungsvariablen: `APP_PORT` (Default 3000), `INSTALL_DIR`, `IMAGE`.
@@ -101,6 +101,28 @@ Für ein **privates** GHCR-Image zusätzlich `GHCR_USER` + `GHCR_TOKEN`
 > Das `AUTH_SECRET` in der erzeugten `.env` sicher aufbewahren — ohne dasselbe Secret ist ein
 > Backup nicht wiederherstellbar. Die App ist für den Betrieb im internen Netz gedacht
 > (Zugriff von außen via VPN). Ist Port 3000 belegt, `APP_PORT=3100 curl … | bash`.
+
+### Zugriff: HTTP (intern) vs. HTTPS (Reverse-Proxy)
+
+Die App ist über **HTTP** (`http://<host>:3000`) direkt nutzbar — gedacht für den
+Betrieb im **vertrauenswürdigen internen Netz / VPN**. Dabei ist der Verkehr aber
+**unverschlüsselt** (Passwörter & Session-Cookie im Klartext).
+
+Das Session-Cookie wird nur dann als `Secure` markiert, wenn `APP_URL` mit `https://`
+beginnt. Für echte Transportverschlüsselung die App hinter einen **HTTPS-Reverse-Proxy**
+setzen und in `$INSTALL_DIR/.env` `APP_URL=https://tracker.example.com` eintragen
+(danach `./install.sh update`). Beispiel mit **Caddy** (automatisches Let's-Encrypt-Zertifikat):
+
+```caddyfile
+# /etc/caddy/Caddyfile
+tracker.example.com {
+    reverse_proxy localhost:3000
+}
+```
+
+Caddy terminiert TLS und leitet intern auf den App-Port weiter; `APP_URL=https://…`
+sorgt dann für korrekte Links in E-Mails **und** das `Secure`-Cookie. (nginx/Traefik
+funktionieren analog — TLS am Proxy, Proxy → `localhost:3000`.)
 
 ## Deployment aus dem Quellcode (Docker)
 
