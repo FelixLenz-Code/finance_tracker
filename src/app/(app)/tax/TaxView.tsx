@@ -177,7 +177,11 @@ export function TaxView({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `steuerreport-${year}${account === "ALL" ? "" : "-" + accountLabel}.csv`;
+    // Export-Zeitstempel (lokale Zeit) im Dateinamen: YYYY-MM-DD_HH-MM-SS.
+    const now = new Date();
+    const p = (n: number) => String(n).padStart(2, "0");
+    const stamp = `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}_${p(now.getHours())}-${p(now.getMinutes())}-${p(now.getSeconds())}`;
+    a.download = `steuerreport-${year}${account === "ALL" ? "" : "-" + accountLabel}_${stamp}.csv`;
     document.body.appendChild(a);
     a.click();
     a.remove();
