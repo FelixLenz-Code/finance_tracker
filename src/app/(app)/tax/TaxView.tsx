@@ -158,7 +158,12 @@ export function TaxView({
   function exportCsv() {
     const sep = ";";
     const dec = (n: number | null) => (n == null ? "" : n.toFixed(2).replace(".", ","));
-    const esc = (s: string) => `"${s.replace(/"/g, '""')}"`;
+    const esc = (s: string) => {
+      // CSV-Injection vermeiden: führende Formelzeichen neutralisieren, damit
+      // Excel/LibreOffice den Wert nicht als Formel ausführt (z. B. "=HYPERLINK(…)").
+      const v = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+      return `"${v.replace(/"/g, '""')}"`;
+    };
     const lines = [["Datum", "Konto", "Symbol", "Typ", "Menge", "Kurs", "Gebühren", "Cashflow", "Währung"].join(sep)];
     for (const r of journal) {
       lines.push([

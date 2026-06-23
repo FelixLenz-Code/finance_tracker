@@ -93,7 +93,7 @@ curl -fsSL https://raw.githubusercontent.com/FelixLenz-Code/finance_tracker/main
 ```
 
 **Versionen:** `:latest` (= das jeweils neueste Release) oder ein fixes Release, z. B.
-`IMAGE=ghcr.io/felixlenz-code/finance_tracker:1.1.1 curl … | bash`. Releases entstehen über
+`IMAGE=ghcr.io/felixlenz-code/finance_tracker:1.1.2 curl … | bash`. Releases entstehen über
 Git-Tags `vX.Y.Z`; die CI baut daraus in **einem** Lauf `:X.Y.Z` und `:latest`.
 
 Optionen via Umgebungsvariablen: `APP_PORT` (Default 3000), `INSTALL_DIR`, `IMAGE`, `APP_URL`,
@@ -133,6 +133,11 @@ tracker.example.com {
 Caddy terminiert TLS und leitet intern auf den App-Port weiter; `APP_URL=https://…`
 sorgt dann für korrekte Links in E-Mails **und** das `Secure`-Cookie. (nginx/Traefik
 funktionieren analog — TLS am Proxy, Proxy → `localhost:3000`.)
+
+Hinter einem Reverse-Proxy bestimmt `TRUSTED_PROXY_HOPS` (Default `1`), wie die echte
+Client-IP fürs Rate-Limit aus `X-Forwarded-For` ermittelt wird — `1` = ein vorgeschalteter
+Proxy. Bei mehreren Proxy-Ebenen entsprechend erhöhen, damit die Brute-Force-Drosselung
+nicht über gefälschte Header umgangen werden kann.
 
 ## Deployment aus dem Quellcode (Docker)
 

@@ -8,7 +8,15 @@ const MAX_FAILED = 8;
 export async function getClientIp(): Promise<string> {
   const h = await headers();
   const fwd = h.get("x-forwarded-for");
-  if (fwd) return fwd.split(",")[0].trim();
+  if (fwd) {
+    // X-Forwarded-For ist eine Liste "client, proxy1, proxy2, …". Der vom Client
+    // gesetzte (linke) Teil ist fälschbar; vertrauenswürdig ist die Adresse, die
+    // der eigene Reverse-Proxy angehängt hat. Bei N vertrauenswürdigen Proxy-Hops
+    // (TRUSTED_PROXY_HOPS, Default 1) ist das der N-te Eintrag von rechts.
+    const parts = fwd.split(",").map((s) => s.trim()).filter(Boolean);
+    const hops = Math.max(1, Number(process.env.TRUSTED_PROXY_HOPS ?? "1") || 1);
+    if (parts.length) return parts[Math.max(0, parts.length - hops)];
+  }
   return h.get("x-real-ip") ?? "unknown";
 }
 

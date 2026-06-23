@@ -7,6 +7,18 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 
+// In Produktion MUSS ein echtes, ausreichend langes AUTH_SECRET gesetzt sein —
+// sonst würden 2FA-Secrets/gespeicherte Keys mit einem bekannten Default
+// verschlüsselt. Der Build setzt einen Platzhalter (>=16 Zeichen), der hier durchgeht.
+if (
+  process.env.NODE_ENV === "production" &&
+  (!process.env.AUTH_SECRET || process.env.AUTH_SECRET.length < 16)
+) {
+  throw new Error(
+    "AUTH_SECRET fehlt oder ist zu kurz (mind. 16 Zeichen) — in Produktion erforderlich.",
+  );
+}
+
 const AUTH_SECRET = process.env.AUTH_SECRET ?? "insecure-dev-secret";
 
 /** Zufälliges, URL-sicheres Token (z.B. für Session-Cookie, Mail-Links). */

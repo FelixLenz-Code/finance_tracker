@@ -137,6 +137,8 @@ services:
       DATABASE_URL: "postgresql://tracker:${POSTGRES_PASSWORD}@db:5432/tracker?schema=public"
       APP_URL: "${APP_URL:-http://localhost:3000}"
       AUTH_SECRET: "${AUTH_SECRET:?set AUTH_SECRET}"
+      # Anzahl vertrauenswürdiger Reverse-Proxy-Hops für die Client-IP (Rate-Limit).
+      TRUSTED_PROXY_HOPS: "${TRUSTED_PROXY_HOPS:-1}"
       TWELVEDATA_API_KEY: "${TWELVEDATA_API_KEY:-}"
       OPENFIGI_API_KEY: "${OPENFIGI_API_KEY:-}"
       SMTP_HOST: "${SMTP_HOST:-}"
@@ -199,6 +201,9 @@ BIND_ADDR=$bind_addr
 APP_URL=$app_url
 AUTH_SECRET=$(gen_secret 48)
 POSTGRES_PASSWORD=$(gen_db_password 24)
+# Vertrauenswürdige Reverse-Proxy-Hops für die echte Client-IP (Rate-Limit).
+# 1 = ein vorgeschalteter Proxy (z. B. Caddy/nginx). Ohne Proxy unkritisch.
+TRUSTED_PROXY_HOPS=1
 
 # Optional (auch im Admin-UI setzbar):
 TWELVEDATA_API_KEY=

@@ -46,9 +46,6 @@ export async function registerAction(
   if (!parsed.success) return { fieldErrors: zodErrors(parsed.error) };
   const { name, email, password } = parsed.data;
 
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) return { fieldErrors: { email: "E-Mail bereits registriert" } };
-
   // Erster Nutzer wird Admin und ist automatisch verifiziert.
   const isFirst = (await prisma.user.count()) === 0;
 
@@ -58,7 +55,24 @@ export async function registerAction(
     return { error: "Die Registrierung ist derzeit deaktiviert." };
   }
 
-  const requireVerification = (await mailConfigured()) && !isFirst;
+  const mailOn = await mailConfigured();
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) {
+    // Keine Account-Enumeration: bei konfiguriertem Mailversand exakt dieselbe
+    // Antwort wie eine verifizierungspflichtige Neuregistrierung liefern und den
+    // bestehenden Inhaber per Mail informieren (statt die Existenz zu verraten).
+    if (mailOn && !isFirst) {
+      await sendMail(
+        email,
+        "Kontoerstellung",
+        `<p>Es wurde versucht, mit dieser E-Mail-Adresse ein Konto zu erstellen. Du hast bereits ein Konto — bitte melde dich an oder setze bei Bedarf dein Passwort zurück.</p>`,
+      ).catch(() => {});
+      redirect("/login?notice=verify");
+    }
+    return { fieldErrors: { email: "E-Mail bereits registriert" } };
+  }
+
+  const requireVerification = mailOn && !isFirst;
 
   const user = await prisma.user.create({
     data: {
@@ -139,6 +153,12 @@ export async function verifyTotpAction(
   const user = session.user;
   if (!user.totpEnabled || !user.totpSecret) redirect("/login");
 
+  // Brute-Force-Schutz auch für den 2FA-Schritt (nicht nur fürs Passwort).
+  const ip = await getClientIp();
+  if (await isLoginBlocked(user.email, ip)) {
+    return { error: "Zu viele Fehlversuche. Bitte in ein paar Minuten erneut versuchen." };
+  }
+
   const { decryptSecret } = await import("@/lib/crypto");
   const code = parsed.data.code.trim();
 
@@ -161,8 +181,12 @@ export async function verifyTotpAction(
     }
   }
 
-  if (!valid) return { error: "Code ungültig" };
+  if (!valid) {
+    await recordLoginAttempt(user.email, ip, false);
+    return { error: "Code ungültig" };
+  }
 
+  await recordLoginAttempt(user.email, ip, true);
   await clearPending2fa(session.id);
   redirect("/");
 }
@@ -210,9 +234,15 @@ export async function resetPasswordAction(
   const email = await consumeToken(parsed.data.token, "PASSWORD_RESET");
   if (!email) return { error: "Link ungültig oder abgelaufen." };
 
-  await prisma.user.update({
+  const user = await prisma.user.update({
     where: { email },
     data: { passwordHash: await hashPassword(parsed.data.password) },
+  });
+  // Alle bestehenden Sessions entwerten (sperrt evtl. Angreifer aus) und übrige
+  // offene Reset-Tokens dieses Kontos invalidieren.
+  await prisma.session.deleteMany({ where: { userId: user.id } });
+  await prisma.verificationToken.deleteMany({
+    where: { identifier: email, purpose: "PASSWORD_RESET" },
   });
   redirect("/login?notice=reset");
 }
