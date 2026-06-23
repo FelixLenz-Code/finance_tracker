@@ -15,6 +15,7 @@ const SMTP_PASS = "SMTP_PASSWORD";
 const SMTP_FROM = "SMTP_FROM";
 const RM_DAYS = "REMINDER_DAYS";
 const RM_TOKEN = "REMINDER_CRON_TOKEN";
+const REG_ENABLED = "REGISTRATION_ENABLED";
 
 /** Secret: zuerst aus der DB (verschlüsselt), sonst aus der Umgebung. */
 async function getSecret(key: string, envName: string): Promise<string | null> {
@@ -186,6 +187,17 @@ export async function reminderStatus(): Promise<{ days: number; hasToken: boolea
     prisma.appSetting.findUnique({ where: { key: RM_TOKEN } }),
   ]);
   return { days, hasToken: Boolean(tokenRow?.value) || Boolean(process.env.REMINDER_CRON_TOKEN) };
+}
+
+// --- Selbst-Registrierung ---
+/** Dürfen sich neue Nutzer selbst registrieren? Standard: ja. */
+export async function isRegistrationEnabled(): Promise<boolean> {
+  return (await getPlain(REG_ENABLED)) !== "off";
+}
+/** Selbst-Registrierung aktivieren/deaktivieren (nur Admin). */
+export async function setRegistrationEnabled(enabled: boolean): Promise<void> {
+  // "" löscht den Schlüssel → Standard (aktiviert); "off" deaktiviert.
+  await setPlain(REG_ENABLED, enabled ? "" : "off");
 }
 
 export async function smtpStatus(): Promise<SmtpStatus> {

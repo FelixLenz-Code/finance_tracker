@@ -8,7 +8,7 @@
 #     ./install.sh [install|update|status|logs|uninstall]
 #
 # Erkennt eine bestehende Installation und aktualisiert sie (alles-oder-nichts via
-# docker compose). Richtet optional eine automatische tägliche Aktualisierung ein.
+# docker compose). Aktualisiert wird ausschließlich manuell (./install.sh update).
 set -euo pipefail
 
 # ---------------------------------------------------------------- Konfiguration
@@ -19,7 +19,6 @@ APP_PORT="${APP_PORT:-3000}"
 if [ "${INSTALL_DIR:-}" = "" ]; then
   if [ "$(id -u)" = "0" ]; then INSTALL_DIR="/opt/finance-tracker"; else INSTALL_DIR="$HOME/.finance-tracker"; fi
 fi
-NO_AUTO_UPDATE="${NO_AUTO_UPDATE:-}"
 # Für private GHCR-Images optional: GHCR_USER + GHCR_TOKEN setzen.
 GHCR_USER="${GHCR_USER:-}"
 GHCR_TOKEN="${GHCR_TOKEN:-}"
@@ -151,50 +150,25 @@ EOF
   chmod +x "$INSTALL_DIR/update.sh"
 }
 
-# ----------------------------------------------------------- Auto-Update
-setup_auto_update() {
-  [ -n "$NO_AUTO_UPDATE" ] && { c_y "Auto-Update übersprungen (NO_AUTO_UPDATE gesetzt)."; return; }
-
-  if [ "$(id -u)" = "0" ] && command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
-    cat > /etc/systemd/system/finance-tracker-update.service <<EOF
-[Unit]
-Description=Trade Tracker — automatisches Update
-Wants=network-online.target
-After=network-online.target docker.service
-
-[Service]
-Type=oneshot
-ExecStart=$INSTALL_DIR/update.sh
-EOF
-    cat > /etc/systemd/system/finance-tracker-update.timer <<'EOF'
-[Unit]
-Description=Trade Tracker — tägliche Update-Prüfung
-
-[Timer]
-OnCalendar=*-*-* 04:00:00
-RandomizedDelaySec=30m
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-EOF
-    systemctl daemon-reload
-    systemctl enable --now finance-tracker-update.timer >/dev/null 2>&1 || true
-    c_g "Auto-Update via systemd-Timer eingerichtet (täglich ~04:00)."
-    return
+# --------------------------------------------- Alt-Installationen aufräumen
+# Frühere Versionen richteten ein automatisches tägliches Update ein. Das wird
+# nicht mehr unterstützt — vorhandene Timer/Cron-Einträge entfernen wir hier.
+remove_auto_update() {
+  local removed=""
+  if [ "$(id -u)" = "0" ] && command -v systemctl >/dev/null 2>&1 \
+     && [ -f /etc/systemd/system/finance-tracker-update.timer ]; then
+    systemctl disable --now finance-tracker-update.timer >/dev/null 2>&1 || true
+    rm -f /etc/systemd/system/finance-tracker-update.service \
+          /etc/systemd/system/finance-tracker-update.timer
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    removed="systemd-Timer"
   fi
-
-  # Fallback: Cron (idempotent über Marker-Kommentar).
-  if command -v crontab >/dev/null 2>&1; then
-    local marker="# finance-tracker-auto-update"
-    local line="0 4 * * * $INSTALL_DIR/update.sh >> $INSTALL_DIR/update.log 2>&1 $marker"
-    local current; current="$(crontab -l 2>/dev/null | grep -v "$marker" || true)"
-    printf '%s\n%s\n' "$current" "$line" | crontab - 2>/dev/null \
-      && c_g "Auto-Update via Cron eingerichtet (täglich 04:00)." \
-      || c_y "Auto-Update konnte nicht automatisch eingerichtet werden — manuell: $INSTALL_DIR/update.sh per Cron/Timer aufrufen."
-    return
+  if command -v crontab >/dev/null 2>&1 \
+     && crontab -l 2>/dev/null | grep -q "# finance-tracker-auto-update"; then
+    crontab -l 2>/dev/null | grep -v "# finance-tracker-auto-update" | crontab - 2>/dev/null || true
+    removed="${removed:+$removed + }Cron-Eintrag"
   fi
-  c_y "Weder systemd noch cron gefunden — Auto-Update bitte manuell einrichten ($INSTALL_DIR/update.sh)."
+  [ -n "$removed" ] && c_y "Früheres Auto-Update entfernt ($removed) — Updates jetzt nur noch manuell."
 }
 
 is_installed() { [ -f "$COMPOSE_FILE" ]; }
@@ -220,7 +194,7 @@ do_install() {
     dc pull
     dc up -d
     docker image prune -f >/dev/null 2>&1 || true
-    setup_auto_update
+    remove_auto_update
     print_access
     return
   fi
@@ -231,7 +205,7 @@ do_install() {
   ghcr_login_if_needed
   dc pull
   dc up -d
-  setup_auto_update
+  remove_auto_update
   print_access
 }
 
@@ -245,6 +219,7 @@ do_update() {
   dc pull
   dc up -d
   docker image prune -f >/dev/null 2>&1 || true
+  remove_auto_update
   print_access
 }
 
@@ -286,7 +261,7 @@ Trade Tracker — Installer (Linux)
   logs        Folgt den Logs
   uninstall   Entfernt Container/Timer (Daten bleiben)
 
-Umgebungsvariablen: INSTALL_DIR, APP_PORT, IMAGE, NO_AUTO_UPDATE, GHCR_USER, GHCR_TOKEN
+Umgebungsvariablen: INSTALL_DIR, APP_PORT, IMAGE, GHCR_USER, GHCR_TOKEN
 EOF
 }
 

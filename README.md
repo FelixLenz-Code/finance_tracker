@@ -77,23 +77,24 @@ curl -fsSL https://raw.githubusercontent.com/FelixLenz-Code/finance_tracker/main
 ```
 
 - Re-Ausführen **erkennt** die bestehende Installation und **aktualisiert** sie.
-- Richtet ein **automatisches tägliches Update** ein (systemd-Timer als root, sonst Cron):
-  holt das neueste Image, wendet Migrationen an, startet neu.
+- Updates erfolgen **manuell** über `./install.sh update` (holt das neueste Image,
+  wendet Migrationen an, startet neu). Frühere automatische Auto-Update-Timer/Cron-Einträge
+  werden beim nächsten Lauf entfernt.
 - Verzeichnis: `/opt/finance-tracker` (als root) bzw. `~/.finance-tracker`.
 
 ```bash
 ./install.sh update      # manuell aktualisieren
 ./install.sh status      # Container-Status
 ./install.sh logs        # Logs folgen
-./install.sh uninstall   # Container/Timer entfernen (Daten bleiben)
+./install.sh uninstall   # Container entfernen (Daten bleiben)
 ```
 
 **Versionen:** `:latest` (jeder Push auf main) oder ein fixes Release, z. B.
-`IMAGE=ghcr.io/felixlenz-code/finance_tracker:1.0.0 curl … | bash`. Releases entstehen über
+`IMAGE=ghcr.io/felixlenz-code/finance_tracker:1.1.0 curl … | bash`. Releases entstehen über
 Git-Tags `vX.Y.Z` (CI baut dann `:X.Y.Z`).
 
-Optionen via Umgebungsvariablen: `APP_PORT` (Default 3000), `INSTALL_DIR`, `IMAGE`,
-`NO_AUTO_UPDATE=1`. Für ein **privates** GHCR-Image zusätzlich `GHCR_USER` + `GHCR_TOKEN`
+Optionen via Umgebungsvariablen: `APP_PORT` (Default 3000), `INSTALL_DIR`, `IMAGE`.
+Für ein **privates** GHCR-Image zusätzlich `GHCR_USER` + `GHCR_TOKEN`
 (Personal Access Token mit `read:packages`) — oder das Package einmalig auf **public** stellen
 (GitHub → Repo → Packages → Package settings → Change visibility).
 

@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/auth";
-import { twelveDataKeySource, openFigiKeySource, backupStatus, smtpStatus, reminderStatus } from "@/lib/settings";
+import { twelveDataKeySource, openFigiKeySource, backupStatus, smtpStatus, reminderStatus, isRegistrationEnabled } from "@/lib/settings";
 import { mailConfigured } from "@/lib/mail";
 import { Card, Badge } from "@/components/ui";
 import { TwoFactor } from "./TwoFactor";
@@ -8,6 +8,7 @@ import { BackupSettings } from "./BackupSettings";
 import { SmtpSettings } from "./SmtpSettings";
 import { ReminderSettings } from "./ReminderSettings";
 import { MyReminderSettings } from "./MyReminderSettings";
+import { RegistrationSettings } from "./RegistrationSettings";
 import {
   saveTwelveDataKey,
   removeTwelveDataKey,
@@ -24,6 +25,7 @@ import {
   saveReminderPrefs,
   regenerateReminderToken,
   runRemindersNow,
+  setRegistration,
 } from "./actions";
 
 export default async function SettingsPage() {
@@ -34,6 +36,7 @@ export default async function SettingsPage() {
   const backup = isAdmin ? await backupStatus() : null;
   const smtp = isAdmin ? await smtpStatus() : null;
   const reminder = isAdmin ? await reminderStatus() : null;
+  const registrationOpen = isAdmin ? await isRegistrationEnabled() : false;
   const mailOk = await mailConfigured();
   return (
     <div className="space-y-6">
@@ -75,6 +78,16 @@ export default async function SettingsPage() {
           saveAction={saveReminderPrefs}
         />
       </Card>
+
+      {isAdmin && (
+        <Card>
+          <h2 className="mb-1 text-lg font-medium">Registrierung (Admin)</h2>
+          <p className="mb-3 text-sm text-zinc-500">
+            Steuert, ob sich neue Nutzer eigenständig ein Konto anlegen können.
+          </p>
+          <RegistrationSettings initialEnabled={registrationOpen} saveAction={setRegistration} />
+        </Card>
+      )}
 
       {isAdmin && (
         <Card>

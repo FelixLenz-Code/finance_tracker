@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
+import { isRegistrationEnabled } from "@/lib/settings";
 import { LoginForm } from "../forms";
 
 export default async function LoginPage({
@@ -9,5 +10,6 @@ export default async function LoginPage({
 }) {
   if (await getCurrentUser()) redirect("/");
   const { notice } = await searchParams;
-  return <LoginForm notice={notice} />;
+  const registrationOpen = await isRegistrationEnabled();
+  return <LoginForm notice={notice} registrationOpen={registrationOpen} />;
 }

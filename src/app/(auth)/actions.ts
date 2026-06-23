@@ -8,6 +8,7 @@ import { verifyTotp } from "@/lib/totp";
 import { isLoginBlocked, recordLoginAttempt, getClientIp } from "@/lib/ratelimit";
 import { createToken, consumeToken } from "@/lib/tokens";
 import { sendMail, mailConfigured } from "@/lib/mail";
+import { isRegistrationEnabled } from "@/lib/settings";
 import {
   registerSchema,
   loginSchema,
@@ -50,6 +51,13 @@ export async function registerAction(
 
   // Erster Nutzer wird Admin und ist automatisch verifiziert.
   const isFirst = (await prisma.user.count()) === 0;
+
+  // Selbst-Registrierung kann vom Admin deaktiviert werden — der allererste
+  // Nutzer (Bootstrap-Admin) darf sich aber immer anlegen.
+  if (!isFirst && !(await isRegistrationEnabled())) {
+    return { error: "Die Registrierung ist derzeit deaktiviert." };
+  }
+
   const requireVerification = (await mailConfigured()) && !isFirst;
 
   const user = await prisma.user.create({

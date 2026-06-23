@@ -18,6 +18,7 @@ import {
   setSmtpPassword,
   clearSmtpConfig,
   setReminderToken,
+  setRegistrationEnabled,
 } from "@/lib/settings";
 import { runBackup } from "@/lib/backup";
 import { sendAllRemindersNow } from "@/lib/reminders";
@@ -269,6 +270,22 @@ export async function runRemindersNow(
   await requireRole("ADMIN");
   const res = await sendAllRemindersNow();
   return res.ok ? { notice: res.message } : { error: res.message };
+}
+
+/** Selbst-Registrierung neuer Nutzer aktivieren/deaktivieren (nur Admin). */
+export async function setRegistration(
+  _prev: SettingsState,
+  formData: FormData,
+): Promise<SettingsState> {
+  await requireRole("ADMIN");
+  const enabled = formData.get("enabled") != null;
+  await setRegistrationEnabled(enabled);
+  revalidatePath("/settings");
+  return {
+    notice: enabled
+      ? "Selbst-Registrierung aktiviert."
+      : "Selbst-Registrierung deaktiviert.",
+  };
 }
 
 /** 2FA deaktivieren — verlangt das aktuelle Passwort. */

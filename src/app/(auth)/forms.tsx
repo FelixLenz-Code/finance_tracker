@@ -23,12 +23,21 @@ function Notice({ message }: { message?: string | null }) {
   );
 }
 
-export function LoginForm({ notice }: { notice?: string }) {
+export function LoginForm({
+  notice,
+  registrationOpen = true,
+}: {
+  notice?: string;
+  registrationOpen?: boolean;
+}) {
   const [state, action, pending] = useActionState(loginAction, initial);
   return (
     <form action={action} className="space-y-4">
       {notice === "verify" && <Notice message="Bitte bestätige zuerst deine E-Mail." />}
       {notice === "reset" && <Notice message="Passwort geändert. Bitte einloggen." />}
+      {notice === "registration-off" && (
+        <Notice message="Die Registrierung ist derzeit deaktiviert." />
+      )}
       <FormError message={state.error} />
       <div>
         <Label htmlFor="email">E-Mail</Label>
@@ -45,7 +54,9 @@ export function LoginForm({ notice }: { notice?: string }) {
       </Button>
       <div className="flex justify-between text-sm text-zinc-400">
         <Link href="/forgot-password" className="hover:text-zinc-200">Passwort vergessen?</Link>
-        <Link href="/register" className="hover:text-zinc-200">Konto erstellen</Link>
+        {registrationOpen && (
+          <Link href="/register" className="hover:text-zinc-200">Konto erstellen</Link>
+        )}
       </div>
     </form>
   );
