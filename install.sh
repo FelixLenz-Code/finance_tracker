@@ -19,6 +19,9 @@ APP_PORT="${APP_PORT:-3000}"
 if [ "${INSTALL_DIR:-}" = "" ]; then
   if [ "$(id -u)" = "0" ]; then INSTALL_DIR="/opt/finance-tracker"; else INSTALL_DIR="$HOME/.finance-tracker"; fi
 fi
+# APP_URL: Basis-URL für generierte Links (E-Mail-Verifizierung, Passwort-Reset).
+# Leer = beim Erzeugen der .env automatisch aus der Host-IP ableiten (statt localhost).
+APP_URL="${APP_URL:-}"
 # Für private GHCR-Images optional: GHCR_USER + GHCR_TOKEN setzen.
 GHCR_USER="${GHCR_USER:-}"
 GHCR_TOKEN="${GHCR_TOKEN:-}"
@@ -47,6 +50,25 @@ dc() { ( cd "$INSTALL_DIR" && "${COMPOSE[@]}" "$@" ); }
 gen_secret() {
   if command -v openssl >/dev/null 2>&1; then openssl rand -base64 "${1:-48}" | tr -d '\n';
   else head -c "${1:-48}" /dev/urandom | base64 | tr -d '\n'; fi
+}
+
+# Primäre, von außen erreichbare IPv4 des Hosts ermitteln (best effort).
+detect_host_ip() {
+  local ip=""
+  if command -v ip >/dev/null 2>&1; then
+    ip="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')"
+  fi
+  if [ -z "$ip" ] && command -v hostname >/dev/null 2>&1; then
+    ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+  fi
+  printf '%s' "$ip"
+}
+
+# Effektive APP_URL: expliziter Wert hat Vorrang, sonst aus Host-IP (Fallback localhost).
+effective_app_url() {
+  if [ -n "$APP_URL" ]; then printf '%s' "$APP_URL"; return; fi
+  local ip; ip="$(detect_host_ip)"
+  printf 'http://%s:%s' "${ip:-localhost}" "$APP_PORT"
 }
 
 ghcr_login_if_needed() {
@@ -104,12 +126,20 @@ YAML
 }
 
 write_env_if_missing() {
+  local app_url; app_url="$(effective_app_url)"
   if [ -f "$ENV_FILE" ]; then
     c_y "Vorhandene .env beibehalten (AUTH_SECRET/Passwörter bleiben erhalten)."
     # Sicherstellen, dass IMAGE/APP_PORT/APP_URL existieren (für ältere Installs).
     grep -q '^IMAGE=' "$ENV_FILE" || echo "IMAGE=$IMAGE" >> "$ENV_FILE"
     grep -q '^APP_PORT=' "$ENV_FILE" || echo "APP_PORT=$APP_PORT" >> "$ENV_FILE"
-    grep -q '^APP_URL=' "$ENV_FILE" || echo "APP_URL=http://localhost:$APP_PORT" >> "$ENV_FILE"
+    local cur_url; cur_url="$(grep -E '^APP_URL=' "$ENV_FILE" | head -n1 | cut -d= -f2-)"
+    if [ -z "$cur_url" ]; then
+      echo "APP_URL=$app_url" >> "$ENV_FILE"
+    elif printf '%s' "$cur_url" | grep -qiE '^http://localhost(:[0-9]+)?/?$' && [ "$cur_url" != "$app_url" ]; then
+      # Alter localhost-Default → auf erreichbare Host-Adresse heben (E-Mail-Links).
+      sed -i.bak "s#^APP_URL=.*#APP_URL=$app_url#" "$ENV_FILE" && rm -f "$ENV_FILE.bak"
+      c_y "APP_URL von localhost auf $app_url gesetzt (für korrekte E-Mail-Links)."
+    fi
     return
   fi
   c_g "Erzeuge neue .env mit zufälligem AUTH_SECRET und DB-Passwort…"
@@ -118,9 +148,11 @@ write_env_if_missing() {
 # Trade Tracker — Instanz-Konfiguration. NICHT versionieren / sicher aufbewahren!
 # AUTH_SECRET verschlüsselt 2FA-Secrets & gespeicherte API-/SMTP-/rclone-Keys —
 # beim Wiederherstellen eines Backups MUSS dasselbe AUTH_SECRET verwendet werden.
+# APP_URL steckt in den Links der Verifizierungs-/Reset-Mails — bei Bedarf auf den
+# extern erreichbaren Host/Reverse-Proxy anpassen (z. B. https://tracker.example.com).
 IMAGE=$IMAGE
 APP_PORT=$APP_PORT
-APP_URL=http://localhost:$APP_PORT
+APP_URL=$app_url
 AUTH_SECRET=$(gen_secret 48)
 POSTGRES_PASSWORD=$(gen_secret 24)
 
@@ -175,9 +207,12 @@ is_installed() { [ -f "$COMPOSE_FILE" ]; }
 
 print_access() {
   local port; port="$(grep -E '^APP_PORT=' "$ENV_FILE" 2>/dev/null | cut -d= -f2)"; port="${port:-$APP_PORT}"
+  local url; url="$(grep -E '^APP_URL=' "$ENV_FILE" 2>/dev/null | head -n1 | cut -d= -f2-)"
   echo
-  c_g "Trade Tracker läuft → http://localhost:${port}"
+  c_g "Trade Tracker läuft → ${url:-http://localhost:$port}"
+  echo  "Lokal:       http://localhost:${port}"
   echo  "Verzeichnis: $INSTALL_DIR"
+  echo  "APP_URL (E-Mail-Links) in $ENV_FILE anpassbar (z. B. hinter Reverse-Proxy)."
   echo  "Erster registrierter Nutzer wird automatisch Admin."
 }
 
