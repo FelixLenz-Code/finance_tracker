@@ -52,6 +52,13 @@ gen_secret() {
   else head -c "${1:-48}" /dev/urandom | base64 | tr -d '\n'; fi
 }
 
+# URL-sicheres Passwort (nur Hex) — landet unkodiert in der DATABASE_URL, daher
+# dürfen keine Sonderzeichen wie / + = vorkommen (sonst P1000 Auth-Fehler).
+gen_db_password() {
+  if command -v openssl >/dev/null 2>&1; then openssl rand -hex "${1:-24}";
+  else head -c "${1:-24}" /dev/urandom | od -An -tx1 | tr -d ' \n'; fi
+}
+
 # Primäre, von außen erreichbare IPv4 des Hosts ermitteln (best effort).
 detect_host_ip() {
   local ip=""
@@ -154,7 +161,7 @@ IMAGE=$IMAGE
 APP_PORT=$APP_PORT
 APP_URL=$app_url
 AUTH_SECRET=$(gen_secret 48)
-POSTGRES_PASSWORD=$(gen_secret 24)
+POSTGRES_PASSWORD=$(gen_db_password 24)
 
 # Optional (auch im Admin-UI setzbar):
 TWELVEDATA_API_KEY=
