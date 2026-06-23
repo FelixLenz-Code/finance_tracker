@@ -1,11 +1,11 @@
 name: Docker Image
 
-# Baut bei jedem Push auf main (und bei Versions-Tags) das Docker-Image und
-# veröffentlicht es in der GitHub Container Registry (GHCR). Der Installer holt
-# anschließend `ghcr.io/<owner>/<repo>:latest`.
+# Baut bei Versions-Tags (vX.Y.Z) das Docker-Image und veröffentlicht es in der
+# GitHub Container Registry (GHCR) — sowohl als `:X.Y.Z` als auch als `:latest`.
+# Releases erfolgen ausschließlich über Tags, daher genau ein Lauf/Image pro Release.
+# Für Ad-hoc-Builds vom aktuellen Stand: manuell via "Run workflow".
 on:
   push:
-    branches: [main]
     tags: ["v*"]
   workflow_dispatch:
 
@@ -36,7 +36,7 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest
             type=sha,format=short
             type=ref,event=tag
             type=semver,pattern={{version}}
