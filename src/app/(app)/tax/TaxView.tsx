@@ -65,6 +65,16 @@ const net = (b: Bucket) => b.gain + b.loss;
 
 type CcyReport = { currency: string; stock: Bucket; option: Bucket; dividends: number };
 
+// Gesamtsumme je Währung über Aktien + Optionen + Dividenden (keine Währungsmischung).
+type Totals = { gain: number; loss: number; saldo: number };
+function totalsOf(rep: CcyReport): Totals {
+  return {
+    gain: rep.stock.gain + rep.option.gain + Math.max(rep.dividends, 0),
+    loss: rep.stock.loss + rep.option.loss + Math.min(rep.dividends, 0),
+    saldo: net(rep.stock) + net(rep.option) + rep.dividends,
+  };
+}
+
 // Vereinheitlichte Journal-Zeile (Trades + Dividenden).
 type JournalRow = {
   date: string;
@@ -164,7 +174,19 @@ export function TaxView({
       const v = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
       return `"${v.replace(/"/g, '""')}"`;
     };
-    const lines = [["Datum", "Konto", "Symbol", "Typ", "Menge", "Kurs", "Gebühren", "Cashflow", "Währung"].join(sep)];
+    const lines: string[] = [];
+    // Zusammenfassung mit Gesamtsummen je Währung (oben), dann das Journal.
+    lines.push(`Zusammenfassung ${year}${account === "ALL" ? "" : " — " + accountLabel}`);
+    lines.push(["Währung", "Kategorie", "Gewinne", "Verluste", "Saldo"].join(sep));
+    for (const rep of reports) {
+      lines.push([rep.currency, "Aktien", dec(rep.stock.gain), dec(rep.stock.loss), dec(net(rep.stock))].join(sep));
+      lines.push([rep.currency, "Optionen / Termingeschäfte", dec(rep.option.gain), dec(rep.option.loss), dec(net(rep.option))].join(sep));
+      lines.push([rep.currency, "Dividenden", dec(rep.dividends), "", dec(rep.dividends)].join(sep));
+      const t = totalsOf(rep);
+      lines.push([rep.currency, "Gesamt", dec(t.gain), dec(t.loss), dec(t.saldo)].join(sep));
+    }
+    lines.push("");
+    lines.push(["Datum", "Konto", "Symbol", "Typ", "Menge", "Kurs", "Gebühren", "Cashflow", "Währung"].join(sep));
     for (const r of journal) {
       lines.push([
         new Date(r.date).toLocaleDateString("de-DE"),
@@ -208,6 +230,7 @@ export function TaxView({
           <tr><td>Aktien</td>${cell(rep.stock.gain, rep.currency, "pos")}${cell(rep.stock.loss, rep.currency, "neg")}${cell(net(rep.stock), rep.currency)}</tr>
           <tr><td>Optionen / Termingeschäfte</td>${cell(rep.option.gain, rep.currency, "pos")}${cell(rep.option.loss, rep.currency, "neg")}${cell(net(rep.option), rep.currency)}</tr>
           <tr><td>Dividenden</td>${cell(rep.dividends, rep.currency, "div")}<td class="r">—</td>${cell(rep.dividends, rep.currency, "div")}</tr>
+          <tr class="tot"><td>Gesamt</td>${cell(totalsOf(rep).gain, rep.currency, "pos")}${cell(totalsOf(rep).loss, rep.currency, "neg")}${cell(totalsOf(rep).saldo, rep.currency)}</tr>
         </tbody>
       </table>`,
       )
@@ -250,6 +273,7 @@ export function TaxView({
         th,td{border:1px solid #ccc;padding:5px 7px;text-align:left;}
         th{background:#f3f3f3;} .r{text-align:right;}
         .pos{color:#15803d;} .neg{color:#b91c1c;} .div{color:#1d4ed8;}
+        .tot td{font-weight:bold;border-top:2px solid #999;background:#fafafa;}
         .note{color:#666;font-size:11px;margin-top:18px;line-height:1.4;}
         @media print{ body{margin:12mm;} }
       </style></head><body>
@@ -360,6 +384,17 @@ export function TaxView({
                     <td className={tdr}>—</td>
                     <td className={cn(tdr, "font-medium text-blue-400")}>{money(rep.dividends, rep.currency)}</td>
                   </tr>
+                  {(() => {
+                    const t = totalsOf(rep);
+                    return (
+                      <tr className="border-t-2 border-white/15 bg-zinc-900/40">
+                        <td className={cn(td, "font-semibold")}>Gesamt</td>
+                        <td className={cn(tdr, "font-semibold text-emerald-400")}>{money(t.gain, rep.currency)}</td>
+                        <td className={cn(tdr, "font-semibold text-red-400")}>{money(t.loss, rep.currency)}</td>
+                        <td className={cn(tdr, "font-bold", pnlClass(t.saldo))}>{money(t.saldo, rep.currency)}</td>
+                      </tr>
+                    );
+                  })()}
                 </tbody>
               </table>
             </div>

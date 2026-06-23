@@ -27,6 +27,8 @@ export default async function StatsPage() {
     status: p.status,
     currency: p.currency,
     realizedPnl: toNum(p.realizedPnl),
+    openedAt: p.openedAt.toISOString(),
+    closedAt: p.closedAt ? p.closedAt.toISOString() : null,
   }));
 
   const accounts = Array.from(

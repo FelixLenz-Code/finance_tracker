@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Card, Select, Label, InfoTip, cn } from "@/components/ui";
+import { Card, Select, Label, Input, Button, InfoTip, cn } from "@/components/ui";
 import { money, pnlClass } from "@/lib/format";
 
 export type StatRow = {
@@ -15,6 +15,8 @@ export type StatRow = {
   status: string;
   currency: string;
   realizedPnl: number;
+  openedAt: string;
+  closedAt: string | null;
 };
 
 type Bucket = {
@@ -80,16 +82,30 @@ export function StatsView({
 }) {
   const [account, setAccount] = useState("ALL");
   const [kind, setKind] = useState("ALL");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+
+  // Maßgebliches Datum je Position: Schließdatum (realisiert) bzw. sonst Eröffnung.
+  const effDate = (r: StatRow) => (r.closedAt ?? r.openedAt).slice(0, 10);
 
   const filtered = useMemo(
     () =>
-      rows.filter(
-        (r) =>
-          (account === "ALL" || r.accountId === account) &&
-          (kind === "ALL" || r.kind === kind),
-      ),
-    [rows, account, kind],
+      rows.filter((r) => {
+        if (account !== "ALL" && r.accountId !== account) return false;
+        if (kind !== "ALL" && r.kind !== kind) return false;
+        const d = effDate(r);
+        if (from && d < from) return false;
+        if (to && d > to) return false;
+        return true;
+      }),
+    [rows, account, kind, from, to],
   );
+
+  const thisYear = new Date().getFullYear();
+  const setYearRange = (y: number) => {
+    setFrom(`${y}-01-01`);
+    setTo(`${y}-12-31`);
+  };
 
   const overall = useMemo(() => bucketOf(filtered), [filtered]);
 
@@ -144,6 +160,41 @@ export function StatsView({
             <option value="OPTION">Optionen</option>
           </Select>
         </div>
+        <div className="w-40">
+          <Label>Von</Label>
+          <Input type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} />
+        </div>
+        <div className="w-40">
+          <Label>Bis</Label>
+          <Input type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} />
+        </div>
+      </div>
+
+      {/* Zeitraum-Schnellauswahl */}
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <span className="text-zinc-500">Zeitraum:</span>
+        <Button type="button" variant="ghost" onClick={() => setYearRange(thisYear)}>Dieses Jahr</Button>
+        <Button type="button" variant="ghost" onClick={() => setYearRange(thisYear - 1)}>Letztes Jahr</Button>
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={() => {
+            const d = new Date();
+            d.setFullYear(d.getFullYear() - 1);
+            setFrom(d.toISOString().slice(0, 10));
+            setTo(new Date().toISOString().slice(0, 10));
+          }}
+        >
+          12 Monate
+        </Button>
+        {(from || to) && (
+          <Button type="button" variant="ghost" onClick={() => { setFrom(""); setTo(""); }}>
+            Zurücksetzen
+          </Button>
+        )}
+        <span className="ml-auto text-xs text-zinc-500">
+          {from || to ? `${from || "Anfang"} – ${to || "heute"}` : "Gesamter Zeitraum"} · {filtered.length} Positionen
+        </span>
       </div>
 
       {/* Übersichtskarten */}
