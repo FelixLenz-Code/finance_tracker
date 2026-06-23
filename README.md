@@ -76,6 +76,9 @@ GitHub Container Registry und richtet alles (DB, App, `.env` mit zufälligem `AU
 curl -fsSL https://raw.githubusercontent.com/FelixLenz-Code/finance_tracker/main/install.sh | bash
 ```
 
+- Der Installer fragt, ob die App **nur lokal** (nur dieser Rechner) oder **netzwerkweit**
+  erreichbar sein soll. Nicht-interaktiv vorgeben mit `LOCAL_ONLY=1` (nur lokal) bzw.
+  `LOCAL_ONLY=0` (netzwerkweit) — siehe [Zugriff](#zugriff-nur-lokal-http-intern-oder-https-reverse-proxy).
 - Re-Ausführen **erkennt** die bestehende Installation und **aktualisiert** sie.
 - Updates erfolgen **manuell** über `./install.sh update` (holt das neueste Image,
   wendet Migrationen an, startet neu). Frühere automatische Auto-Update-Timer/Cron-Einträge
