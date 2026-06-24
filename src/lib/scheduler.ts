@@ -7,6 +7,7 @@ import {
 } from "@/lib/settings";
 import { runDueReminders } from "@/lib/reminders";
 import { runBackup } from "@/lib/backup";
+import { zonedDateKey } from "@/lib/time";
 
 const TICK_MS = 10 * 60 * 1000; // alle 10 Minuten prüfen
 
@@ -37,7 +38,7 @@ async function tick() {
   running = true;
   try {
     const now = new Date();
-    const today = now.toISOString().slice(0, 10);
+    const today = zonedDateKey(now);
 
     // Erinnerungen: pro Nutzer zur jeweils eigenen Uhrzeit/Frist.
     const sent = await runDueReminders(now);

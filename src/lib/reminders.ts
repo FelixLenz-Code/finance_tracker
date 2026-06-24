@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { sendMail, mailConfigured } from "@/lib/mail";
 import { renderEmail, emailParagraph, escapeHtml } from "@/lib/email";
 import { fmtDate, toNum } from "@/lib/format";
+import { zonedHour, zonedDateKey } from "@/lib/time";
 
 export type ReminderResult = { ok: boolean; message: string; users: number; options: number };
 
@@ -65,7 +66,7 @@ export async function sendAllRemindersNow(): Promise<ReminderResult> {
   if (!(await mailConfigured())) {
     return { ok: false, message: "Kein SMTP konfiguriert.", users: 0, options: 0 };
   }
-  const today = new Date().toISOString().slice(0, 10);
+  const today = zonedDateKey();
   const users = await prisma.user.findMany({
     where: { remindersEnabled: true },
     select: { id: true, email: true, reminderDays: true },
@@ -89,9 +90,9 @@ export async function sendAllRemindersNow(): Promise<ReminderResult> {
  */
 export async function runDueReminders(now: Date): Promise<number> {
   if (!(await mailConfigured())) return 0;
-  const today = now.toISOString().slice(0, 10);
+  const today = zonedDateKey(now);
   const users = await prisma.user.findMany({
-    where: { remindersEnabled: true, reminderHour: { lte: now.getHours() } },
+    where: { remindersEnabled: true, reminderHour: { lte: zonedHour(now) } },
     select: { id: true, email: true, reminderDays: true, reminderLastSent: true },
   });
   let sent = 0;
