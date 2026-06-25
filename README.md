@@ -305,3 +305,18 @@ Historie samt aggregiertem Ketten-G&V auf.
 - Keine Live-Kurse / kein automatischer **unrealisierter** G&V (Preise sind manuell).
 - EU-Optionsstammdaten sind per Gratis-API kaum verfügbar → EU-Optionen manuell erfassen
   (Underlying-Aktie hat Auto-Fill).
+
+## Hinweis zur KI-Unterstützung
+
+Diese Software wurde vollständig mithilfe von Claude (einem KI-Assistenten von Anthropic)
+entwickelt. Der Autor hat die Anforderungen definiert, Entscheidungen getroffen und das
+Ergebnis geprüft — der Code selbst wurde durch den Dialog mit der KI generiert.
+
+## Haftungsausschluss
+
+Die Software wird so bereitgestellt, wie sie ist (as-is), ohne jegliche Garantie auf
+Korrektheit, Vollständigkeit oder Eignung für einen bestimmten Zweck. Der Autor übernimmt
+keinerlei Haftung für Schäden, Datenverluste oder sonstige Probleme, die durch die Verwendung
+dieser Software entstehen. Die Nutzung erfolgt auf eigene Verantwortung. Insbesondere stellt
+diese Software **keine Steuer-, Anlage- oder Rechtsberatung** dar; für die Richtigkeit von
+Steuerreports und Auswertungen wird keine Gewähr übernommen.
