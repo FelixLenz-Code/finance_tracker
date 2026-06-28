@@ -70,6 +70,16 @@ function CcyAmounts({ map, align = "left" }: { map: Record<string, number>; alig
   );
 }
 
+/** Label→Wert-Paar für die Mobil-Karten (statt Tabellenspalten). */
+function KV({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <dt className="text-zinc-500">{label}</dt>
+      <dd className="mt-0.5 text-zinc-200">{children}</dd>
+    </div>
+  );
+}
+
 function winRatePct(b: Bucket): number | null {
   if (b.completed === 0) return null;
   return Math.round((b.wins / b.completed) * 100);
@@ -272,7 +282,22 @@ export function StatsView({
       {account === "ALL" && perAccount.length > 1 && (
         <Card>
           <h2 className="mb-2 text-sm font-medium text-zinc-300">Pro Depot</h2>
-          <div className="overflow-x-auto rounded-lg border border-white/5">
+          {/* Mobil: Karten */}
+          <div className="space-y-2 md:hidden">
+            {perAccount.map((a) => (
+              <div key={a.id} className="rounded-lg border border-white/5 bg-zinc-950/40 p-3">
+                <p className="font-medium">{a.name}</p>
+                <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                  <KV label="Realisierter G&V"><CcyAmounts map={a.b.realizedByCcy} /></KV>
+                  <KV label="Trefferquote">{winRateLabel(a.b)}</KV>
+                  <KV label="Offen">{a.b.open}</KV>
+                  <KV label="Abgeschlossen">{a.b.completed}</KV>
+                </dl>
+              </div>
+            ))}
+          </div>
+          {/* Desktop: Tabelle */}
+          <div className="hidden overflow-x-auto rounded-lg border border-white/5 md:block">
             <table className="w-full text-sm">
               <thead className="bg-zinc-900/60 text-xs text-zinc-400">
                 <tr>
@@ -302,7 +327,25 @@ export function StatsView({
       {/* Pro Instrument */}
       <Card>
         <h2 className="mb-2 text-sm font-medium text-zinc-300">Pro Instrument</h2>
-        <div className="overflow-x-auto rounded-lg border border-white/5">
+        {/* Mobil: Karten */}
+        <div className="space-y-2 md:hidden">
+          {perInstrument.length === 0 && (
+            <p className="rounded-lg border border-white/5 px-3 py-6 text-center text-zinc-500">Keine Daten.</p>
+          )}
+          {perInstrument.map((i) => (
+            <div key={i.symbol} className="rounded-lg border border-white/5 bg-zinc-950/40 p-3">
+              <p className="font-medium">{i.symbol} <span className="font-normal text-zinc-400">{i.name}</span></p>
+              <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                <KV label="Realisierter G&V"><CcyAmounts map={i.b.realizedByCcy} /></KV>
+                <KV label="Trefferquote">{winRateLabel(i.b)}</KV>
+                <KV label="Positionen">{i.b.count}</KV>
+                <KV label="Offen">{i.b.open}</KV>
+              </dl>
+            </div>
+          ))}
+        </div>
+        {/* Desktop: Tabelle */}
+        <div className="hidden overflow-x-auto rounded-lg border border-white/5 md:block">
           <table className="w-full text-sm">
             <thead className="bg-zinc-900/60 text-xs text-zinc-400">
               <tr>

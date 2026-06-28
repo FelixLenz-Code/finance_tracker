@@ -375,7 +375,21 @@ export function TaxView({
               <Badge color="blue">{rep.currency}</Badge>
               <h2 className="text-sm font-medium text-zinc-300">Zusammenfassung {year}</h2>
             </div>
-            <div className="rounded-lg border border-white/5">
+            {/* Mobil: Karten */}
+            <div className="space-y-2 md:hidden">
+              <SummaryCardRow label="Aktien" gain={rep.stock.gain} loss={rep.stock.loss} saldo={net(rep.stock)} ccy={rep.currency} />
+              <SummaryCardRow label="Optionen / Termingeschäfte" gain={rep.option.gain} loss={rep.option.loss} saldo={net(rep.option)} ccy={rep.currency} />
+              <SummaryCardRow label="Dividenden" gain={rep.dividends} loss={null} saldo={rep.dividends} ccy={rep.currency} blue />
+              {(rep.fx.gain !== 0 || rep.fx.loss !== 0) && (
+                <SummaryCardRow label="Währungsgewinne" gain={rep.fx.gain} loss={rep.fx.loss} saldo={net(rep.fx)} ccy={rep.currency} />
+              )}
+              {(() => {
+                const t = totalsOf(rep);
+                return <SummaryCardRow label="Gesamt" gain={t.gain} loss={t.loss} saldo={t.saldo} ccy={rep.currency} total />;
+              })()}
+            </div>
+            {/* Desktop: Tabelle */}
+            <div className="hidden rounded-lg border border-white/5 md:block">
               <table className="w-full text-sm">
                 <thead className="bg-zinc-900/60 text-xs text-zinc-400">
                   <tr>
@@ -425,7 +439,22 @@ export function TaxView({
       {realizedYear.length > 0 && (
         <Card>
           <h2 className="mb-2 text-sm font-medium text-zinc-300">Realisierte Positionen {year}</h2>
-          <div className="overflow-x-auto rounded-lg border border-white/5">
+          {/* Mobil: Karten */}
+          <div className="space-y-2 md:hidden">
+            {realizedYear.map((r, i) => (
+              <div key={i} className="rounded-lg border border-white/5 bg-zinc-950/40 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium">{r.symbol}</span>
+                  <span className={cn("font-medium", pnlClass(r.pnl))}>{money(r.pnl, r.currency)}</span>
+                </div>
+                <p className="mt-1 text-xs text-zinc-500">
+                  {r.kind === "STOCK" ? "Aktie" : "Option"} · {fmtDate(r.realizedAt)} · {r.accountName}
+                </p>
+              </div>
+            ))}
+          </div>
+          {/* Desktop: Tabelle */}
+          <div className="hidden overflow-x-auto rounded-lg border border-white/5 md:block">
             <table className="w-full text-sm">
               <thead className="bg-zinc-900/60 text-xs text-zinc-400">
                 <tr>
@@ -458,7 +487,34 @@ export function TaxView({
         {journal.length === 0 ? (
           <p className="text-zinc-400">Keine Trades in {year}.</p>
         ) : (
-          <div className="overflow-x-auto rounded-lg border border-white/5">
+          <>
+          {/* Mobil: Karten */}
+          <div className="space-y-2 md:hidden">
+            {journal.map((r, i) => (
+              <div key={i} className="rounded-lg border border-white/5 bg-zinc-950/40 p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="min-w-0 font-medium">
+                    {r.symbol || "—"}{" "}
+                    <span className="font-normal text-zinc-400">
+                      {r.type === "Dividende" ? <span className="text-blue-400">Dividende</span> : r.type}
+                    </span>
+                  </span>
+                  <span className={cn("shrink-0 font-medium", r.type === "Dividende" ? "text-blue-400" : pnlClass(r.cashFlow))}>
+                    {money(r.cashFlow, r.currency)}
+                  </span>
+                </div>
+                <dl className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-0.5 text-xs">
+                  <KV label="Datum">{fmtDate(r.date)}</KV>
+                  <KV label="Konto">{r.account}</KV>
+                  <KV label="Menge">{r.qty == null ? "—" : num(r.qty, 4)}</KV>
+                  <KV label="Kurs">{r.price == null ? "—" : money(r.price, r.currency)}</KV>
+                  {r.fees ? <KV label="Gebühren">{money(r.fees, r.currency)}</KV> : null}
+                </dl>
+              </div>
+            ))}
+          </div>
+          {/* Desktop: Tabelle */}
+          <div className="hidden overflow-x-auto rounded-lg border border-white/5 md:block">
             <table className="w-full text-sm">
               <thead className="bg-zinc-900/60 text-xs text-zinc-400">
                 <tr>
@@ -492,6 +548,7 @@ export function TaxView({
               </tbody>
             </table>
           </div>
+          </>
         )}
       </Card>
 
@@ -501,6 +558,43 @@ export function TaxView({
         getrennt ausgewiesen (unterschiedliche Verlustverrechnung in DE). <b>Keine Steuerberatung</b> —
         bitte mit den Erträgnisaufstellungen des Brokers abgleichen.
       </p>
+    </div>
+  );
+}
+
+/** Label→Wert-Paar für Mobil-Karten. */
+function KV({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <dt className="text-zinc-500">{label}</dt>
+      <dd className="mt-0.5 text-zinc-200">{children}</dd>
+    </div>
+  );
+}
+
+/** Mobil-Variante einer Zusammenfassungszeile (Gewinne/Verluste/Saldo). */
+function SummaryCardRow({
+  label, gain, loss, saldo, ccy, blue = false, total = false,
+}: {
+  label: string; gain: number; loss: number | null; saldo: number; ccy: string; blue?: boolean; total?: boolean;
+}) {
+  return (
+    <div className={cn("rounded-lg border bg-zinc-950/40 p-3", total ? "border-white/15" : "border-white/5")}>
+      <p className={cn("text-sm", total ? "font-semibold" : "font-medium")}>{label}</p>
+      <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+        <div>
+          <span className="block text-zinc-500">Gewinne</span>
+          <span className={blue ? "text-blue-400" : "text-emerald-400"}>{money(gain, ccy)}</span>
+        </div>
+        <div>
+          <span className="block text-zinc-500">Verluste</span>
+          <span className="text-red-400">{loss == null ? "—" : money(loss, ccy)}</span>
+        </div>
+        <div>
+          <span className="block text-zinc-500">Saldo</span>
+          <span className={cn("font-medium", blue ? "text-blue-400" : pnlClass(saldo))}>{money(saldo, ccy)}</span>
+        </div>
+      </div>
     </div>
   );
 }
