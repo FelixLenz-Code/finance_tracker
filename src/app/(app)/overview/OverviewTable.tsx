@@ -85,6 +85,14 @@ export function OverviewTable({
     }
   }
 
+  const toggleExpand = (id: string) =>
+    setExpanded((p) => {
+      const n = new Set(p);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+
   const th = "px-3 py-2 text-left font-medium text-zinc-400";
   const td = "px-3 py-2 align-top";
 
@@ -157,8 +165,8 @@ export function OverviewTable({
         </span>
       </div>
 
-      {/* Tabelle */}
-      <div className="overflow-x-auto rounded-lg border border-zinc-800">
+      {/* Tabelle (Desktop) */}
+      <div className="hidden overflow-x-auto rounded-lg border border-zinc-800 md:block">
         <table className="w-full text-sm">
           <thead className="border-b border-zinc-800 bg-zinc-900/60">
             <tr>
@@ -198,14 +206,7 @@ export function OverviewTable({
                   isOpen={isOpen}
                   isExp={isExp}
                   td={td}
-                  onToggleExpand={() =>
-                    setExpanded((p) => {
-                      const n = new Set(p);
-                      if (n.has(r.id)) n.delete(r.id);
-                      else n.add(r.id);
-                      return n;
-                    })
-                  }
+                  onToggleExpand={() => toggleExpand(r.id)}
                   setAction={(type) => setAction({ id: r.id, type })}
                   onShowNotes={() => setNotesRow(r)}
                   onShowEdit={() => setEditRow(r)}
@@ -214,6 +215,27 @@ export function OverviewTable({
             })}
           </tbody>
         </table>
+      </div>
+
+      {/* Karten (Mobil) — kein horizontales Scrollen */}
+      <div className="space-y-2 md:hidden">
+        {filtered.length === 0 && (
+          <p className="rounded-lg border border-zinc-800 px-3 py-6 text-center text-sm text-zinc-500">
+            Keine Einträge. Erfasse deinen ersten Trade.
+          </p>
+        )}
+        {filtered.map((r) => (
+          <MobileRow
+            key={r.id}
+            r={r}
+            isOpen={OPEN_STATES.has(r.status)}
+            isExp={expanded.has(r.id)}
+            onToggleExpand={() => toggleExpand(r.id)}
+            setAction={(type) => setAction({ id: r.id, type })}
+            onShowNotes={() => setNotesRow(r)}
+            onShowEdit={() => setEditRow(r)}
+          />
+        ))}
       </div>
 
       {actionRow && action && (
@@ -311,6 +333,202 @@ function statusColor(s: string): "green" | "zinc" | "amber" | "blue" | "red" {
   return "zinc";
 }
 
+/** Primär-Aktion (Schließen/Verkaufen) + „⋯"-Menü — geteilt von Tabellenzeile und Mobil-Karte. */
+function RowActions({
+  r,
+  isOpen,
+  setAction,
+  onShowEdit,
+}: {
+  r: Row;
+  isOpen: boolean;
+  setAction: (t: string) => void;
+  onShowEdit: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-1">
+      {isOpen && (
+        <ActBtn label={r.kind === "STOCK" ? "Verkaufen" : "Schließen"} onClick={() => setAction("close")} />
+      )}
+      <ActionsMenu>
+        {(close) => {
+          const showRoll = isOpen && r.kind === "OPTION";
+          const showEdit = r.status === "OPEN" && r.transactions.length === 1;
+          const showUndo = r.isChain && r.status === "OPEN";
+          const showReopen = r.kind === "OPTION" && ["CLOSED", "EXPIRED", "ASSIGNED"].includes(r.status);
+          const hasAbove = showRoll || showEdit || showUndo || showReopen;
+          return (
+            <>
+              {showRoll && (
+                <>
+                  <MenuItem label="Rollen" onClick={() => { setAction("roll"); close(); }} />
+                  <MenuItem label="Verfall buchen" onClick={() => { setAction("expire"); close(); }} />
+                  <MenuItem label="Andienung buchen" onClick={() => { setAction("assign"); close(); }} />
+                </>
+              )}
+              {showEdit && (
+                <MenuItem label="Bearbeiten" onClick={() => { onShowEdit(); close(); }} />
+              )}
+              {showUndo && (
+                <ActionButton
+                  action={undoRollAction}
+                  positionId={r.id}
+                  label="Roll rückgängig"
+                  confirmText="Letzten Roll rückgängig machen? Die neue Position wird gelöscht und die vorherige wieder geöffnet."
+                  className={MENU_ITEM_CLASS}
+                  onSelect={close}
+                />
+              )}
+              {showReopen && (
+                <ActionButton
+                  action={reopenOptionAction}
+                  positionId={r.id}
+                  label="Wieder öffnen"
+                  confirmText="Diese Option wieder öffnen? Die Abschluss-Buchung (Schließen/Verfall/Andienung) wird rückgängig gemacht."
+                  className={MENU_ITEM_CLASS}
+                  onSelect={close}
+                />
+              )}
+              {hasAbove && <div className="my-1 h-px bg-white/5" />}
+              <DeleteEntryButton
+                positionId={r.id}
+                label={`${r.symbol}${r.kind === "OPTION" ? ` ${r.optionRight ?? ""} ${r.strike ?? ""}` : ""}`}
+                legs={r.legs.length}
+                className={cn(MENU_ITEM_CLASS, "text-red-400 hover:bg-red-950/40")}
+                onSelect={close}
+              />
+            </>
+          );
+        }}
+      </ActionsMenu>
+    </div>
+  );
+}
+
+/** Transaktions-Historie als Liste (für die Mobil-Karte; in der Tabelle als <tr>). */
+function TxnList({ r }: { r: Row }) {
+  return (
+    <div className="space-y-1">
+      {r.transactions.map((t) => (
+        <div key={t.id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
+          <span className="text-zinc-500">{fmtDate(t.tradeDate)}</span>
+          <Badge color="zinc">{txnLabel(t.type)}</Badge>
+          <span className="text-zinc-400">
+            {num(t.qty, 4)} × {money(t.price, t.currency)}
+            {t.fees ? ` · Geb. ${money(t.fees, t.currency)}` : ""}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Detail-Zeile (Label → Wert) für die Mobil-Karte. */
+function MobileStat({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <>
+      <dt className="text-zinc-500">{label}</dt>
+      <dd className="text-right text-zinc-200">{children}</dd>
+    </>
+  );
+}
+
+/**
+ * Mobil-Darstellung einer Trade-Zeile als Karte (kein horizontales Scrollen).
+ * Nutzt dieselben Handler/Aktionen wie die Tabellenzeile.
+ */
+function MobileRow({
+  r,
+  isOpen,
+  isExp,
+  onToggleExpand,
+  setAction,
+  onShowNotes,
+  onShowEdit,
+}: {
+  r: Row;
+  isOpen: boolean;
+  isExp: boolean;
+  onToggleExpand: () => void;
+  setAction: (t: string) => void;
+  onShowNotes: () => void;
+  onShowEdit: () => void;
+}) {
+  const details =
+    r.kind === "OPTION" ? optionLabel(r) : r.direction === "SHORT" ? "Aktie einzeln (Short)" : "Aktie einzeln";
+  return (
+    <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3 text-sm">
+      {/* Kopf: Symbol + Status + realisierter G&V */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-1.5 font-medium">
+          <button onClick={onToggleExpand} className="text-zinc-400 hover:text-zinc-100" aria-label="Details ein-/ausklappen">
+            {isExp ? "▼" : "▶"}
+          </button>
+          <span className="truncate">{r.symbol}</span>
+          {r.hasNotes && (
+            <button
+              type="button"
+              onClick={onShowNotes}
+              aria-label="Notizen anzeigen"
+              className="shrink-0 text-amber-400/80 transition-colors hover:text-amber-300"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <path d="M14 2v6h6M9 13h6M9 17h4" />
+              </svg>
+            </button>
+          )}
+        </div>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <Badge color={statusColor(r.status)}>{statusLabel(r.status)}</Badge>
+          <span className={cn("font-medium tabular-nums", pnlClass(r.realizedPnl))}>
+            {num(r.realizedPnl)} {r.currency}
+          </span>
+        </div>
+      </div>
+
+      {/* Kennzahlen */}
+      <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+        <MobileStat label="Konto">{r.accountName}</MobileStat>
+        <MobileStat label="Details">{details}</MobileStat>
+        <MobileStat label="Menge">{num(r.qty, 4)} × {money(r.avgOpenPrice, r.currency)}</MobileStat>
+        <MobileStat label="Eröffnet">{fmtDate(r.openedAt)}</MobileStat>
+        {r.isChain && (
+          <MobileStat label="Roll-Kette">{r.legs.length} Legs</MobileStat>
+        )}
+      </dl>
+
+      {/* Aktionen */}
+      <div className="mt-2 flex justify-end border-t border-white/5 pt-2">
+        <RowActions r={r} isOpen={isOpen} setAction={setAction} onShowEdit={onShowEdit} />
+      </div>
+
+      {/* Ausgeklappt: Legs + Transaktionen */}
+      {isExp && (
+        <div className="mt-2 space-y-2 border-t border-white/5 pt-2">
+          {r.isChain && r.legs.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-zinc-400">Roll-Kette</p>
+              {r.legs.map((leg) => (
+                <div key={leg.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-zinc-400">
+                  <span className="text-zinc-500">↳</span>
+                  <span>{optionLabel(leg)}</span>
+                  <Badge color={statusColor(leg.status)}>{statusLabel(leg.status)}</Badge>
+                  <span className={pnlClass(leg.realizedPnl)}>{num(leg.realizedPnl)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <div>
+            <p className="mb-1 text-xs font-medium text-zinc-400">Transaktionen</p>
+            <TxnList r={r} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FragmentRow({
   r,
   isOpen,
@@ -378,66 +596,7 @@ function FragmentRow({
         </td>
         <td className={td}>{fmtDate(r.openedAt)}</td>
         <td className={td}>
-          <div className="flex items-center gap-1">
-            {isOpen && (
-              <ActBtn
-                label={r.kind === "STOCK" ? "Verkaufen" : "Schließen"}
-                onClick={() => setAction("close")}
-              />
-            )}
-            <ActionsMenu>
-              {(close) => {
-                const showRoll = isOpen && r.kind === "OPTION";
-                const showEdit = r.status === "OPEN" && r.transactions.length === 1;
-                const showUndo = r.isChain && r.status === "OPEN";
-                const showReopen =
-                  r.kind === "OPTION" && ["CLOSED", "EXPIRED", "ASSIGNED"].includes(r.status);
-                const hasAbove = showRoll || showEdit || showUndo || showReopen;
-                return (
-                  <>
-                    {showRoll && (
-                      <>
-                        <MenuItem label="Rollen" onClick={() => { setAction("roll"); close(); }} />
-                        <MenuItem label="Verfall buchen" onClick={() => { setAction("expire"); close(); }} />
-                        <MenuItem label="Andienung buchen" onClick={() => { setAction("assign"); close(); }} />
-                      </>
-                    )}
-                    {showEdit && (
-                      <MenuItem label="Bearbeiten" onClick={() => { onShowEdit(); close(); }} />
-                    )}
-                    {showUndo && (
-                      <ActionButton
-                        action={undoRollAction}
-                        positionId={r.id}
-                        label="Roll rückgängig"
-                        confirmText="Letzten Roll rückgängig machen? Die neue Position wird gelöscht und die vorherige wieder geöffnet."
-                        className={MENU_ITEM_CLASS}
-                        onSelect={close}
-                      />
-                    )}
-                    {showReopen && (
-                      <ActionButton
-                        action={reopenOptionAction}
-                        positionId={r.id}
-                        label="Wieder öffnen"
-                        confirmText="Diese Option wieder öffnen? Die Abschluss-Buchung (Schließen/Verfall/Andienung) wird rückgängig gemacht."
-                        className={MENU_ITEM_CLASS}
-                        onSelect={close}
-                      />
-                    )}
-                    {hasAbove && <div className="my-1 h-px bg-white/5" />}
-                    <DeleteEntryButton
-                      positionId={r.id}
-                      label={`${r.symbol}${r.kind === "OPTION" ? ` ${r.optionRight ?? ""} ${r.strike ?? ""}` : ""}`}
-                      legs={r.legs.length}
-                      className={cn(MENU_ITEM_CLASS, "text-red-400 hover:bg-red-950/40")}
-                      onSelect={close}
-                    />
-                  </>
-                );
-              }}
-            </ActionsMenu>
-          </div>
+          <RowActions r={r} isOpen={isOpen} setAction={setAction} onShowEdit={onShowEdit} />
         </td>
       </tr>
 
@@ -468,18 +627,7 @@ function FragmentRow({
           <td className={td} colSpan={9}>
             <div className="py-1">
               <p className="mb-1 text-xs font-medium text-zinc-400">Transaktionen</p>
-              <div className="space-y-1">
-                {r.transactions.map((t) => (
-                  <div key={t.id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
-                    <span className="text-zinc-500">{fmtDate(t.tradeDate)}</span>
-                    <Badge color="zinc">{txnLabel(t.type)}</Badge>
-                    <span className="text-zinc-400">
-                      {num(t.qty, 4)} × {money(t.price, t.currency)}
-                      {t.fees ? ` · Geb. ${money(t.fees, t.currency)}` : ""}
-                    </span>
-                  </div>
-                ))}
-              </div>
+              <TxnList r={r} />
             </div>
           </td>
         </tr>

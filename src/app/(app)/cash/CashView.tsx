@@ -260,11 +260,11 @@ export function CashView({ accounts }: { accounts: AccountCashView[] }) {
           </h3>
           <div className="divide-y divide-white/5 rounded-lg border border-white/5">
             {acc.bookings.map((b) => (
-              <div key={b.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
-                <span className="flex min-w-0 items-center gap-2">
+              <div key={b.id} className="flex flex-col gap-1.5 px-3 py-2.5 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-2 sm:py-2">
+                <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                   <Badge color={b.type === "EXCHANGE" ? "blue" : b.dividend ? "blue" : b.deletable ? (b.amount >= 0 ? "green" : "amber") : "zinc"}>{b.label}</Badge>
                   <span className="text-zinc-400">{fmtDate(b.date)}</span>
-                  {b.note && <span className="truncate text-zinc-500">· {b.note}</span>}
+                  {b.note && <span className="min-w-0 truncate text-zinc-500">· {b.note}</span>}
                 </span>
                 <span className="flex shrink-0 items-center gap-3">
                   {b.type === "EXCHANGE" && b.exchange ? (
