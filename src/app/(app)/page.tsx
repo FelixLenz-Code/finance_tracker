@@ -4,9 +4,10 @@ import { prisma } from "@/lib/db";
 import { getCashSummary, type CcySummary } from "@/lib/cash";
 import { Card, InfoTip, Badge, cn } from "@/components/ui";
 import { NewTradeButton } from "./trades/NewTradeButton";
-import { Donut, HBars, CHART_COLORS } from "@/components/charts";
+import { Donut, CHART_COLORS } from "@/components/charts";
+import { RealizedPnlChart } from "./RealizedPnlChart";
 import { OPTION_MULTIPLIER } from "@/lib/constants";
-import { money, num, pnlClass, toNum, fmtDate } from "@/lib/format";
+import { money, pnlClass, toNum, fmtDate } from "@/lib/format";
 
 function CcyList({ map, tone }: { map: Record<string, number>; tone?: boolean }) {
   const e = Object.entries(map).filter(([, v]) => v !== 0);
@@ -122,18 +123,10 @@ export default async function DashboardPage() {
     .slice(0, 8)
     .map(([label, value], i) => ({ label, value, color: CHART_COLORS[i % CHART_COLORS.length] }));
 
-  // Monatlicher realisierter G&V (Hauptwährung)
-  const monthly = new Map<string, number>();
-  for (const p of positions) {
-    if (!p.closedAt || p.currency !== mainCcy) continue;
-    const d = p.closedAt;
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    monthly.set(key, (monthly.get(key) ?? 0) + toNum(p.realizedPnl));
-  }
-  const monthlyData = [...monthly.entries()]
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .slice(-8)
-    .map(([k, v]) => ({ label: k.slice(2).replace("-", "/"), value: v }));
+  // Realisierter G&V je geschlossener Position (Hauptwährung) für die Equity-Kurve.
+  const realizedPoints = positions
+    .filter((p) => p.closedAt && p.currency === mainCcy)
+    .map((p) => ({ date: (p.closedAt as Date).toISOString(), pnl: toNum(p.realizedPnl) }));
 
   if (summary.length === 0) {
     return (
@@ -151,7 +144,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">Dashboard</h1>
         <div className="flex items-center gap-3">
           <Link href="/stats" className="text-sm text-emerald-400">Detaillierte Statistik →</Link>
@@ -257,13 +250,13 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      {/* Monatlicher G&V */}
+      {/* Realisierter G&V über die Zeit (kumuliert) */}
       <Card>
         <h2 className="mb-3 flex items-center text-sm font-medium text-zinc-300">
-          Realisierter G&V pro Monat <span className="ml-1 text-xs text-zinc-500">({mainCcy})</span>
-          <InfoTip text="Realisierter Gewinn/Verlust je Monat (Schlussdatum) in der Hauptwährung." />
+          Realisierter G&V über die Zeit <span className="ml-1 text-xs text-zinc-500">({mainCcy})</span>
+          <InfoTip text="Kumulierter realisierter Gewinn/Verlust (geschlossene Positionen nach Schlussdatum) in der Hauptwährung. Zeitraum oben wählbar." />
         </h2>
-        <HBars data={monthlyData} format={(n) => num(n)} />
+        <RealizedPnlChart points={realizedPoints} currency={mainCcy} />
       </Card>
     </div>
   );

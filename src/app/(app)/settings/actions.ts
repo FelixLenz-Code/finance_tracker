@@ -22,6 +22,7 @@ import {
 } from "@/lib/settings";
 import { runBackup } from "@/lib/backup";
 import { sendAllRemindersNow } from "@/lib/reminders";
+import { getVapidPublicKey } from "@/lib/push";
 import { sendMail } from "@/lib/mail";
 import { renderEmail, emailParagraph } from "@/lib/email";
 import { verifyPassword, hashPassword } from "@/lib/password";
@@ -255,6 +256,38 @@ export async function saveReminderPrefs(
   });
   revalidatePath("/settings");
   return { notice: "Erinnerungs-Einstellungen gespeichert." };
+}
+
+/** Öffentlicher VAPID-Schlüssel für die Push-Subscription (erzeugt ihn bei Bedarf). */
+export async function getPushPublicKey(): Promise<string> {
+  await requireUser();
+  return getVapidPublicKey();
+}
+
+/** Push-Abonnement dieses Browsers speichern und Push für den Nutzer aktivieren. */
+export async function subscribePush(sub: {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+}): Promise<void> {
+  const user = await requireUser();
+  await prisma.pushSubscription.upsert({
+    where: { endpoint: sub.endpoint },
+    update: { userId: user.id, p256dh: sub.p256dh, auth: sub.auth },
+    create: { userId: user.id, endpoint: sub.endpoint, p256dh: sub.p256dh, auth: sub.auth },
+  });
+  await prisma.user.update({ where: { id: user.id }, data: { pushEnabled: true } });
+  revalidatePath("/settings");
+}
+
+/** Push-Abonnement dieses Browsers entfernen und Push für den Nutzer deaktivieren. */
+export async function unsubscribePush(endpoint?: string): Promise<void> {
+  const user = await requireUser();
+  await prisma.pushSubscription.deleteMany({
+    where: { userId: user.id, ...(endpoint ? { endpoint } : {}) },
+  });
+  await prisma.user.update({ where: { id: user.id }, data: { pushEnabled: false } });
+  revalidatePath("/settings");
 }
 
 /** Cron-Token für Erinnerungen neu erzeugen (nur Admin). */

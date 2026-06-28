@@ -73,7 +73,7 @@ export function TradeForm({ accounts, onSuccess }: { accounts: Account[]; onSucc
       <TickerPicker defaultCurrency={account?.baseCurrency} onCurrency={setInstrCcy} />
 
       {kind === "STOCK" ? (
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div>
             <Label htmlFor="side">Seite</Label>
             <Select id="side" name="side" defaultValue="BUY">
@@ -94,7 +94,7 @@ export function TradeForm({ accounts, onSuccess }: { accounts: Account[]; onSucc
         </div>
       ) : (
         <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <Label htmlFor="direction">Richtung</Label>
               <Select id="direction" name="direction" defaultValue="SHORT">
@@ -110,7 +110,7 @@ export function TradeForm({ accounts, onSuccess }: { accounts: Account[]; onSucc
               </Select>
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div>
               <Label htmlFor="strike">Strike</Label>
               <NumberInput id="strike" name="strike" unit={ccy} required />
@@ -135,7 +135,7 @@ export function TradeForm({ accounts, onSuccess }: { accounts: Account[]; onSucc
               <FieldError message={state.fieldErrors?.contracts} />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <Label htmlFor="premium">
                 Prämie je Aktie
@@ -164,7 +164,7 @@ export function TradeForm({ accounts, onSuccess }: { accounts: Account[]; onSucc
       )}
 
       {/* Gemeinsame Felder */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <Label htmlFor="tradeDate">Datum</Label>
           <Input id="tradeDate" name="tradeDate" type="date" defaultValue={today()} required />

@@ -70,10 +70,15 @@ export default async function SettingsPage() {
       <Card>
         <h2 className="mb-1 text-lg font-medium">Erinnerungen</h2>
         <p className="mb-3 text-sm text-zinc-500">
-          E-Mail-Erinnerung für deine offenen Optionen, die bald verfallen.
+          E-Mail- und Push-Erinnerung für deine offenen Optionen, die bald verfallen.
         </p>
         <MyReminderSettings
-          initial={{ enabled: user.remindersEnabled, days: user.reminderDays, hour: user.reminderHour }}
+          initial={{
+            enabled: user.remindersEnabled,
+            days: user.reminderDays,
+            hour: user.reminderHour,
+            pushEnabled: user.pushEnabled,
+          }}
           mailConfigured={mailOk}
           saveAction={saveReminderPrefs}
         />

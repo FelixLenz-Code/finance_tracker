@@ -16,6 +16,9 @@ const SMTP_FROM = "SMTP_FROM";
 const RM_DAYS = "REMINDER_DAYS";
 const RM_TOKEN = "REMINDER_CRON_TOKEN";
 const REG_ENABLED = "REGISTRATION_ENABLED";
+const VAPID_PUB = "VAPID_PUBLIC_KEY";
+const VAPID_PRIV = "VAPID_PRIVATE_KEY";
+const VAPID_SUBJECT = "VAPID_SUBJECT";
 
 /** Secret: zuerst aus der DB (verschlüsselt), sonst aus der Umgebung. */
 async function getSecret(key: string, envName: string): Promise<string | null> {
@@ -198,6 +201,32 @@ export async function isRegistrationEnabled(): Promise<boolean> {
 export async function setRegistrationEnabled(enabled: boolean): Promise<void> {
   // "" löscht den Schlüssel → Standard (aktiviert); "off" deaktiviert.
   await setPlain(REG_ENABLED, enabled ? "" : "off");
+}
+
+// --- Web-Push (VAPID) ---
+/** Gespeichertes VAPID-Schlüsselpaar (öffentlich plain, privat verschlüsselt). */
+export async function getStoredVapidKeys(): Promise<{ publicKey: string | null; privateKey: string | null }> {
+  const [publicKey, privateKey] = await Promise.all([
+    getPlainOrEnv(VAPID_PUB, "VAPID_PUBLIC_KEY"),
+    getSecret(VAPID_PRIV, "VAPID_PRIVATE_KEY"),
+  ]);
+  return { publicKey, privateKey };
+}
+export async function setVapidKeys(publicKey: string, privateKey: string): Promise<void> {
+  await setPlain(VAPID_PUB, publicKey);
+  await setSecret(VAPID_PRIV, privateKey);
+}
+/** VAPID-Subject (mailto:/https:) für Web-Push; aus Setting/ENV oder SMTP-Absender. */
+export async function getVapidSubject(): Promise<string> {
+  const explicit = await getPlainOrEnv(VAPID_SUBJECT, "VAPID_SUBJECT");
+  if (explicit) return explicit;
+  const from = await getPlainOrEnv(SMTP_FROM, "SMTP_FROM");
+  const match = from?.match(/[^<>\s@]+@[^<>\s@]+/);
+  return match ? `mailto:${match[0]}` : "mailto:admin@trade-tracker.local";
+}
+export async function vapidConfigured(): Promise<boolean> {
+  const { publicKey, privateKey } = await getStoredVapidKeys();
+  return Boolean(publicKey && privateKey);
 }
 
 export async function smtpStatus(): Promise<SmtpStatus> {

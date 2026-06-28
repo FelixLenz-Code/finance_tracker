@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { Nav } from "@/components/nav";
+import { MobileNav } from "@/components/MobileNav";
 import { Logo } from "@/components/Logo";
 import { logoutAction } from "@/app/(auth)/actions";
 
@@ -10,7 +11,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-full flex-1">
-      <aside className="sticky top-0 flex h-screen w-64 flex-col border-r border-white/5 bg-zinc-950/60 px-4 py-5 backdrop-blur">
+      <aside className="sticky top-0 hidden h-screen w-64 flex-col border-r border-white/5 bg-zinc-950/60 px-4 py-5 backdrop-blur md:flex">
         <div className="px-1">
           <Logo />
         </div>
@@ -50,9 +51,25 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
       </aside>
 
-      <main className="flex-1 overflow-auto">
-        <div className="mx-auto w-full max-w-6xl px-6 py-8 sm:px-8">{children}</div>
-      </main>
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Mobil-Top-Bar: Logo + Profil/Einstellungen (Desktop nutzt die Seitenleiste). */}
+        <header className="sticky top-0 z-20 flex items-center justify-between border-b border-white/5 bg-zinc-950/80 px-4 py-3 backdrop-blur md:hidden">
+          <Logo />
+          <Link
+            href="/settings"
+            title="Einstellungen öffnen"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500/15 text-xs font-semibold text-emerald-300 ring-1 ring-inset ring-emerald-500/25"
+          >
+            {initials}
+          </Link>
+        </header>
+
+        <main className="flex-1 overflow-auto">
+          <div className="mx-auto w-full max-w-6xl px-4 py-6 pb-24 sm:px-8 sm:py-8 md:pb-8">{children}</div>
+        </main>
+      </div>
+
+      <MobileNav logoutAction={logoutAction} />
     </div>
   );
 }

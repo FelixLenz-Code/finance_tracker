@@ -29,15 +29,30 @@ model User {
   totpSecret   String? // verschlüsselt/Base32, nur gesetzt wenn 2FA eingerichtet
   // Persönliche Optionsablauf-Erinnerungen
   remindersEnabled Boolean @default(true)
+  pushEnabled      Boolean @default(false) // PWA-Push-Benachrichtigungen (zweiter, optionaler Kanal)
   reminderDays     Int     @default(7)
   reminderHour     Int     @default(9)
   reminderLastSent String? // YYYY-MM-DD des letzten Versands (Dedup im Scheduler)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  accounts    Account[]
-  sessions    Session[]
-  backupCodes BackupCode[]
+  accounts          Account[]
+  sessions          Session[]
+  backupCodes       BackupCode[]
+  pushSubscriptions PushSubscription[]
+}
+
+// Web-Push-Subscription eines Browsers/Geräts (PWA). Pro Nutzer mehrere möglich.
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String // öffentlicher Client-Schlüssel (Base64url)
+  auth      String // Auth-Secret (Base64url)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 model Session {

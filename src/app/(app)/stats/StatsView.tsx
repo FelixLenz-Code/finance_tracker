@@ -165,8 +165,8 @@ export function StatsView({
   return (
     <div className="space-y-6">
       {/* Filter */}
-      <div className="flex flex-wrap gap-3">
-        <div className="w-56">
+      <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap">
+        <div className="col-span-2 sm:w-56">
           <Label>Depot</Label>
           <Select value={account} onChange={(e) => setAccount(e.target.value)}>
             <option value="ALL">Alle Depots zusammen</option>
@@ -175,7 +175,7 @@ export function StatsView({
             ))}
           </Select>
         </div>
-        <div className="w-44">
+        <div className="col-span-2 sm:w-44">
           <Label>Art</Label>
           <Select value={kind} onChange={(e) => setKind(e.target.value)}>
             <option value="ALL">Alle</option>
@@ -183,11 +183,11 @@ export function StatsView({
             <option value="OPTION">Optionen</option>
           </Select>
         </div>
-        <div className="w-40">
+        <div className="sm:w-40">
           <Label>Von</Label>
           <Input type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} />
         </div>
-        <div className="w-40">
+        <div className="sm:w-40">
           <Label>Bis</Label>
           <Input type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} />
         </div>

@@ -29,8 +29,17 @@ Dashboards.
   Dividenden und realisierter G&V; Aktienbestand; Ein-/Auszahlungen **und Dividenden** (Popup);
   Buchungsliste (manuelle Buchungen + automatische Cashflows aus Trades).
 - **Einstellungen** — Profil, **2FA/TOTP**, persönliche **Optionsablauf-Erinnerungen** (je
-  Nutzer: an/aus, Frist in Tagen, Uhrzeit), und als Admin: Marktdaten-Keys, **E-Mail-Server
-  (SMTP)** mit Test-Versand sowie das **verschlüsselte Offsite-Backup** (siehe unten).
+  Nutzer: an/aus, Frist in Tagen, Uhrzeit) — wahlweise per **E-Mail** und/oder als
+  **PWA-Push-Benachrichtigung** (gleicher Inhalt, pro Gerät aktivierbar), und als Admin:
+  Marktdaten-Keys, **E-Mail-Server (SMTP)** mit Test-Versand sowie das **verschlüsselte
+  Offsite-Backup** (siehe unten).
+
+> **Push-Benachrichtigungen** benötigen einen **HTTPS**-Zugang (Web-Push funktioniert nur
+> im sicheren Kontext; Ausnahme: `localhost`). Auf iPhone/iPad muss die App zuerst über
+> „Zum Home-Bildschirm" als PWA installiert werden (iOS ≥ 16.4). Die nötigen VAPID-Schlüssel
+> werden beim ersten Aktivieren automatisch erzeugt und in der Datenbank gespeichert — kein
+> Setup nötig. Optional lässt sich der Push-Absender über `VAPID_SUBJECT` (mailto:/https:)
+> setzen; sonst wird der SMTP-Absender verwendet.
 
 ## Stack
 
