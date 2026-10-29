@@ -1,12 +1,12 @@
 # Debian-basiert (glibc) — passt zu Prismas Schema-Engine; Alpine/musl würde Probleme machen.
 # --- Dependencies ---
-FROM node:20-slim AS deps
+FROM node:24-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
 # --- Build ---
-FROM node:20-slim AS builder
+FROM node:24-slim AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -20,8 +20,13 @@ RUN npm run build
 # Volle node_modules statt standalone: Prisma-7-Migrate-CLI benötigt diverse
 # Transitiv-Deps (@prisma/config → effect …). Für eine selbst-gehostete App ist
 # Robustheit wichtiger als minimale Imagegröße.
-FROM node:20-slim AS runner
+FROM node:24-slim AS runner
 WORKDIR /app
+# Guard: Node < 24.22.1 ist von CVE-2026-111497 (HTTP2Shell, Brotli-RCE) betroffen —
+# u. a. über serverseitiges fetch() mit `Content-Encoding: br`. Build bricht sonst ab.
+RUN node -e 'const [a,b,c]=process.versions.node.split(".").map(Number); \
+  if (a<24 || (a===24 && (b<22 || (b===22 && c<1)))) { \
+    console.error("Node " + process.version + " ist anfällig für CVE-2026-111497 (>= 24.22.1 nötig)"); process.exit(1); }'
 ENV NODE_ENV=production
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/.next ./.next

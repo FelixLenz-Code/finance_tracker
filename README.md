@@ -58,7 +58,7 @@ in der DB; hat Vorrang vor `.env`).
 
 ## Voraussetzungen
 
-- **Node.js ≥ 20.9** (z. B. via `nvm install 20`) — Next 16 läuft nicht auf Node 18
+- **Node.js ≥ 24.22.1** (z. B. via `nvm install 24`) — ältere Versionen sind von CVE-2026-111497 (HTTP2Shell, Brotli-RCE) betroffen; Node 20 erhält keinen Fix mehr
 - **Docker** (für PostgreSQL bzw. das komplette Deployment)
 - **rclone** — nur falls das Offsite-Backup genutzt wird (`apt install rclone`)
 
